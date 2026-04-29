@@ -113,3 +113,51 @@ Le projet devra montrer :
 ## Première idée de filtrage des données
 
 Pour limiter le périmètre du projet, je commencerai par filtrer uniquement les ventes correspondant à des appartements à Paris. Je pourrai ensuite supprimer les lignes avec des surfaces manquantes ou incohérentes, puis calculer le prix au m² pour chaque transaction.
+
+---
+
+## Premières analyses exploratoires EDA
+
+### Chiffres clés
+
+| Indicateur | Valeur |
+|---|---|
+| Lignes dans le fichier brut | 420 066 |
+| Lignes après filtrage (Vente / Paris / Appartement / surface > 0) | 188 426 |
+| Lignes après suppression des outliers (prix_m2 entre 3 000 et 25 000 €) | 156 077 |
+| Prix médian au m² | **10 300 €/m²** |
+| Prix moyen au m² | 10 771 €/m² |
+
+### Arrondissements les plus chers (prix m² médian)
+
+| Arrondissement | Prix m² médian |
+|---|---|
+| 75006 (Saint-Germain-des-Prés) | 14 646 €/m² |
+| 75007 (Invalides / Tour Eiffel) | 14 483 €/m² |
+| 75004 (Marais / Île de la Cité) | 12 933 €/m² |
+| 75001 (Louvre / Les Halles) | 12 700 €/m² |
+| 75008 (Champs-Élysées) | 12 304 €/m² |
+
+### Arrondissements les moins chers (prix m² médian)
+
+| Arrondissement | Prix m² médian |
+|---|---|
+| 75012 (Nation / Vincennes) | 9 714 €/m² |
+| 75018 (Montmartre / La Chapelle) | 9 321 €/m² |
+| 75013 (Gobelins / Chinatown) | 9 286 €/m² |
+| 75020 (Belleville / Ménilmontant) | 8 670 €/m² |
+| 75019 (La Villette / Buttes-Chaumont) | 8 409 €/m² |
+
+### Limites observées dans les données
+
+- Les colonnes `valeur_fonciere`, `surface_reelle_bati` et `code_departement` sont de type `object` dans le CSV brut et nécessitent une conversion explicite.
+- Une même mutation (id_mutation) peut apparaître sur plusieurs lignes (un lot par ligne), ce qui peut introduire des doublons si on ne filtre pas correctement par `type_local`.
+- Les valeurs extrêmes de prix_m2 (< 3 000 ou > 25 000 €/m²) représentent environ 17 % des observations filtrées (32 349 lignes supprimées). Elles correspondent probablement à des erreurs de saisie, des biens atypiques ou des mutations complexes.
+- Peu de variables explicatives directement exploitables : pas d'informations sur l'étage, l'état du bien, ou la proximité aux transports.
+- La surface Carrez (surface des lots) est souvent manquante ; la variable `surface_reelle_bati` est utilisée à la place.
+
+### Localisation des fichiers
+
+- **Notebook EDA** : `notebooks/01_dvf_paris_eda.ipynb`
+- **Dataset brut** : `data/raw/dvf.csv` (non versionné)
+- **Dataset nettoyé** : `data/processed/dvf_paris_clean.csv` (non versionné)
