@@ -158,7 +158,7 @@ Pour limiter le périmètre du projet, je commencerai par filtrer uniquement les
 
 ### Localisation des fichiers
 
-- **Notebook EDA** : `notebooks/01_dvf_paris_eda.ipynb`
+- **Notebook EDA** : `notebooks/exploration_data.ipynb`
 - **Dataset brut** : `data/raw/dvf.csv` (non versionné)
 - **Dataset nettoyé** : `data/processed/dvf_paris_clean.csv` (non versionné)
 
@@ -216,7 +216,7 @@ Les coordonnées (latitude, longitude) ont été converties en radians avant d'a
 - **Qualité du signal** : à Paris, la densité du réseau de transport est si élevée que la quasi-totalité des biens se trouvent à moins de 500 m d'une station. La variabilité de cette feature est donc plus faible qu'en banlieue.
 - **Absence de pondération par fréquence ou ligne** : toutes les stations ont le même poids dans le calcul. Une station de RER Express (forte desserte longue distance) et un arrêt de bus local sont traités identiquement.
 - **Dataset brut** : `data/processed/dvf_paris_transport_enriched.csv` (non versionné)
-- **Notebook de croisement** : `notebooks/02_dvf_transport_merge.ipynb`
+- **Notebook de croisement** : `notebooks/exploration_data.ipynb` (sections 3–6)
 
 ## Provenance, collecte et contraintes légales des données
 
