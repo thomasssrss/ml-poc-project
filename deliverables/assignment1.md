@@ -161,3 +161,102 @@ Pour limiter le périmètre du projet, je commencerai par filtrer uniquement les
 - **Notebook EDA** : `notebooks/01_dvf_paris_eda.ipynb`
 - **Dataset brut** : `data/raw/dvf.csv` (non versionné)
 - **Dataset nettoyé** : `data/processed/dvf_paris_clean.csv` (non versionné)
+
+---
+
+## Croisement avec les données de transport IDF
+
+### Deuxième dataset : Emplacement des gares IDF
+
+Le dataset `data/external/emplacement-des-gares-idf.csv` est publié en open data par Île-de-France Mobilités (IDFM). Il recense l'ensemble des arrêts et stations de transport en commun d'Île-de-France.
+
+Colonnes utilisées :
+
+| Colonne | Description |
+|---|---|
+| `Geo Point` | Coordonnées géographiques de la station (latitude, longitude) |
+| `nom_long` | Nom complet de la station |
+| `res_com` | Réseau / ligne commerciale |
+| `indice_lig` | Indice de ligne |
+| `mode` | Mode de transport (Métro, RER, Tramway, Bus, Train) |
+| `exploitant` | Opérateur (RATP, SNCF, etc.) |
+
+Après nettoyage (suppression des lignes sans coordonnées), le dataset comprend plusieurs centaines de stations couvrant Paris et la petite couronne.
+
+### Méthode de croisement
+
+Pour chaque transaction DVF, les variables d'accessibilité ont été calculées en utilisant `sklearn.neighbors.BallTree` avec la distance haversine (distance sphérique).
+
+Cette approche permet un calcul vectorisé efficace sur l'ensemble du dataset sans boucle Python explicite.
+
+Les coordonnées (latitude, longitude) ont été converties en radians avant d'alimenter le BallTree, conformément aux exigences de la métrique haversine. Les distances en radians sont ensuite converties en mètres via le rayon terrestre moyen (6 371 km).
+
+### Nouvelles features créées
+
+| Feature | Description |
+|---|---|
+| `distance_station_plus_proche` | Distance en mètres à la station la plus proche |
+| `nom_station_plus_proche` | Nom de la station la plus proche |
+| `mode_station_plus_proche` | Mode de transport de la station la plus proche |
+| `ligne_station_plus_proche` | Numéro de ligne de la station la plus proche |
+| `nb_stations_500m` | Nombre de stations dans un rayon de 500 m |
+| `nb_stations_1000m` | Nombre de stations dans un rayon de 1 000 m |
+
+### Premiers résultats observés
+
+- La grande majorité des appartements parisiens se trouvent à moins de 500 m d'une station de transport, ce qui reflète la densité du réseau RATP/SNCF à Paris.
+- Une légère tendance se dégage : les biens situés à moins de 500 m d'une station présentent un prix m² médian légèrement supérieur à ceux situés au-delà, bien que l'écart reste modeste à l'échelle de Paris.
+- La corrélation (Pearson) entre la distance à la station et le prix au m² est faible et négative, confirmant que la proximité aux transports est associée à des prix plus élevés, mais que cet effet seul n'explique qu'une part limitée de la variance.
+- Les biens dont la station la plus proche est un RER ou un Tramway présentent des prix m² médians légèrement différents de ceux proches d'une station de Métro.
+
+### Limites du croisement
+
+- **Granularité géographique** : les coordonnées DVF sont souvent approximatives (centroïde de section cadastrale), ce qui peut introduire des erreurs de quelques dizaines de mètres sur la distance calculée.
+- **Date des données** : le dataset stations représente l'état actuel du réseau, alors que les transactions DVF couvrent plusieurs années. Des stations ouvertes récemment peuvent biaiser les distances calculées pour les transactions anciennes.
+- **Qualité du signal** : à Paris, la densité du réseau de transport est si élevée que la quasi-totalité des biens se trouvent à moins de 500 m d'une station. La variabilité de cette feature est donc plus faible qu'en banlieue.
+- **Absence de pondération par fréquence ou ligne** : toutes les stations ont le même poids dans le calcul. Une station de RER Express (forte desserte longue distance) et un arrêt de bus local sont traités identiquement.
+- **Dataset brut** : `data/processed/dvf_paris_transport_enriched.csv` (non versionné)
+- **Notebook de croisement** : `notebooks/02_dvf_transport_merge.ipynb`
+
+## Provenance, collecte et contraintes légales des données
+
+### Dataset principal : DVF
+
+Le dataset principal utilisé est DVF, pour Demandes de valeurs foncières. Il recense les ventes de biens fonciers et immobiliers réalisées sur les dernières années en France. Dans ce projet, il est utilisé pour extraire les transactions d'appartements situées à Paris et calculer une variable cible : le prix au m².
+
+Le fichier utilisé a été téléchargé manuellement depuis les données DVF disponibles en open data. Il est placé localement dans le repository à l'emplacement suivant :
+
+`data/raw/dvf.csv`
+
+Ce fichier brut n'est pas versionné sur GitHub car il est volumineux. Le repository documente donc son emplacement attendu et son utilisation.
+
+### Dataset externe : stations de transport IDF
+
+Un second dataset est utilisé pour enrichir les données immobilières avec une variable d'accessibilité aux transports. Il s'agit du fichier des gares et stations du réseau ferré d'Île-de-France.
+
+Le fichier est placé dans le repository à l'emplacement suivant :
+
+`data/external/emplacement-des-gares-idf.csv`
+
+Ce dataset contient notamment les noms des stations, les modes de transport, les lignes et les coordonnées géographiques. Il permet de calculer des variables comme la distance à la station la plus proche ou le nombre de stations à proximité.
+
+### Méthode de collecte
+
+Les deux datasets ont été obtenus par téléchargement manuel depuis des plateformes open data :
+
+- DVF : données ouvertes des valeurs foncières ;
+- Stations IDF : données ouvertes sur les gares et stations du réseau ferré d'Île-de-France.
+
+Aucune méthode de scraping n'a été utilisée. Il n'est donc pas nécessaire de créer un fichier `src/scraping.py`.
+
+### Contraintes légales et usage
+
+Les données DVF sont disponibles en open data, mais elles peuvent contenir des informations sensibles liées aux transactions immobilières. Leur réutilisation ne doit pas permettre la ré-identification de personnes physiques ni l'indexation des données par des moteurs de recherche externes. L'analyse sera donc réalisée à un niveau agrégé et dans un objectif pédagogique, sans tentative d'identification d'individus ou de propriétaires.
+
+Le dataset des stations IDF est utilisé comme donnée géographique ouverte pour enrichir les transactions avec des informations de proximité aux transports.
+
+### Justification du choix
+
+Le choix de DVF est pertinent car il fournit des prix de vente réellement observés sur le marché immobilier, contrairement à des prix d'annonces qui peuvent être biaisés. Le choix du dataset des stations IDF est pertinent car la proximité aux transports est un facteur susceptible d'influencer le prix au m² des appartements parisiens.
+
+Le croisement des deux sources permet donc de construire un dataset plus riche pour un modèle de régression supervisée.
