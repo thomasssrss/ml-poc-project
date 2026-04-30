@@ -317,11 +317,13 @@ http-client.private.env.json
 
 # Exclude logs directory
 logs/*
-# Local datasets
+# Local datasets (all data stays local, not on GitHub)
 data/raw/*
 data/processed/*
+data/external/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/external/.gitkeep
 
 # Python virtual environment
 .venv/
