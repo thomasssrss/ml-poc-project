@@ -164,34 +164,17 @@ Pour limiter le périmètre du projet, je commencerai par filtrer uniquement les
 
 ---
 
-## Croisement avec les données de transport IDF
+## Croisement avec les données externes
 
-### Deuxième dataset : Emplacement des gares IDF
+Trois datasets externes ont été croisés avec le DVF pour enrichir les features. La méthode utilisée est identique pour les trois : `sklearn.neighbors.BallTree` avec la métrique haversine, permettant un calcul vectorisé de distances sphériques sans boucle Python. Les coordonnées sont converties en radians avant d'alimenter le BallTree, puis reconverties en mètres via le rayon terrestre moyen (6 371 km).
 
-Le dataset `data/external/emplacement-des-gares-idf.csv` est publié en open data par Île-de-France Mobilités (IDFM). Il recense l'ensemble des arrêts et stations de transport en commun d'Île-de-France.
+---
 
-Colonnes utilisées :
+### Deuxième dataset : Stations de transport IDF
 
-| Colonne | Description |
-|---|---|
-| `Geo Point` | Coordonnées géographiques de la station (latitude, longitude) |
-| `nom_long` | Nom complet de la station |
-| `res_com` | Réseau / ligne commerciale |
-| `indice_lig` | Indice de ligne |
-| `mode` | Mode de transport (Métro, RER, Tramway, Bus, Train) |
-| `exploitant` | Opérateur (RATP, SNCF, etc.) |
+Le dataset `data/external/emplacement-des-gares-idf.csv` est publié en open data par Île-de-France Mobilités (IDFM). Il recense l'ensemble des arrêts et stations de transport en commun d'Île-de-France (Métro, RER, Tramway, Bus, Train).
 
-Après nettoyage (suppression des lignes sans coordonnées), le dataset comprend plusieurs centaines de stations couvrant Paris et la petite couronne.
-
-### Méthode de croisement
-
-Pour chaque transaction DVF, les variables d'accessibilité ont été calculées en utilisant `sklearn.neighbors.BallTree` avec la distance haversine (distance sphérique).
-
-Cette approche permet un calcul vectorisé efficace sur l'ensemble du dataset sans boucle Python explicite.
-
-Les coordonnées (latitude, longitude) ont été converties en radians avant d'alimenter le BallTree, conformément aux exigences de la métrique haversine. Les distances en radians sont ensuite converties en mètres via le rayon terrestre moyen (6 371 km).
-
-### Nouvelles features créées
+**Features créées :**
 
 | Feature | Description |
 |---|---|
@@ -202,61 +185,95 @@ Les coordonnées (latitude, longitude) ont été converties en radians avant d'a
 | `nb_stations_500m` | Nombre de stations dans un rayon de 500 m |
 | `nb_stations_1000m` | Nombre de stations dans un rayon de 1 000 m |
 
-### Premiers résultats observés
+**Premiers résultats :** La quasi-totalité des appartements parisiens se trouvent à moins de 500 m d'une station, ce qui reflète la densité du réseau RATP/SNCF. La corrélation (Pearson) entre la distance à la station et le prix au m² est faible et négative : la proximité aux transports est associée à des prix légèrement plus élevés, mais cet effet seul n'explique qu'une part limitée de la variance.
 
-- La grande majorité des appartements parisiens se trouvent à moins de 500 m d'une station de transport, ce qui reflète la densité du réseau RATP/SNCF à Paris.
-- Une légère tendance se dégage : les biens situés à moins de 500 m d'une station présentent un prix m² médian légèrement supérieur à ceux situés au-delà, bien que l'écart reste modeste à l'échelle de Paris.
-- La corrélation (Pearson) entre la distance à la station et le prix au m² est faible et négative, confirmant que la proximité aux transports est associée à des prix plus élevés, mais que cet effet seul n'explique qu'une part limitée de la variance.
-- Les biens dont la station la plus proche est un RER ou un Tramway présentent des prix m² médians légèrement différents de ceux proches d'une station de Métro.
+**Limites :** Les coordonnées DVF sont approximatives (centroïde cadastral). Le dataset stations représente l'état actuel du réseau, pas celui au moment des transactions.
 
-### Limites du croisement
+---
 
-- **Granularité géographique** : les coordonnées DVF sont souvent approximatives (centroïde de section cadastrale), ce qui peut introduire des erreurs de quelques dizaines de mètres sur la distance calculée.
-- **Date des données** : le dataset stations représente l'état actuel du réseau, alors que les transactions DVF couvrent plusieurs années. Des stations ouvertes récemment peuvent biaiser les distances calculées pour les transactions anciennes.
-- **Qualité du signal** : à Paris, la densité du réseau de transport est si élevée que la quasi-totalité des biens se trouvent à moins de 500 m d'une station. La variabilité de cette feature est donc plus faible qu'en banlieue.
-- **Absence de pondération par fréquence ou ligne** : toutes les stations ont le même poids dans le calcul. Une station de RER Express (forte desserte longue distance) et un arrêt de bus local sont traités identiquement.
-- **Dataset brut** : `data/processed/dvf_paris_transport_enriched.csv` (non versionné)
-- **Notebook de croisement** : `notebooks/exploration_data.ipynb` (sections 3–6)
+### Troisième dataset : Espaces verts de Paris
+
+Le dataset `data/external/espaces_verts.csv` est publié en open data par la Ville de Paris. Il recense 2 528 espaces verts (parcs, squares, jardinières) avec leurs coordonnées géographiques et leur surface.
+
+**Features créées :**
+
+| Feature | Description |
+|---|---|
+| `distance_ev_plus_proche` | Distance en mètres à l'espace vert le plus proche |
+| `surface_ev_plus_proche` | Surface en m² de l'espace vert le plus proche |
+| `nb_ev_500m` | Nombre d'espaces verts dans un rayon de 500 m |
+
+**Premiers résultats :** Une légère corrélation négative entre la distance à un espace vert et le prix au m² est observée, confirmant que la proximité à un parc est associée à des prix plus élevés.
+
+**Limites :** Le dataset inclut toutes les typologies d'espaces verts, y compris de simples jardinières de voirie, ce qui peut diluer l'effet des grands parcs.
+
+---
+
+### Quatrième dataset : Base Permanente des Équipements INSEE 2024 (BPE)
+
+Le dataset `data/external/BPE24.csv` est publié par l'INSEE. Il recense l'ensemble des équipements et services disponibles sur le territoire français (2,8 millions de lignes au national). Seuls les équipements parisiens susceptibles d'influencer le prix au m² ont été conservés :
+
+| Catégorie | Codes INSEE | Équipements |
+|---|---|---|
+| Éducation | A501, A502, A503 | Écoles maternelles, élémentaires, primaires |
+| Santé | D265, D307, D269 | Médecins généralistes, pharmacies, infirmiers |
+| Commerces | B201, B302, B310, B311 | Boulangeries, banques, restaurants, cafés |
+| Loisirs | F101, F111 | Cinémas, bibliothèques |
+
+**Features créées (par catégorie) :**
+
+| Feature | Description |
+|---|---|
+| `distance_education_plus_proche` | Distance en mètres à l'école la plus proche |
+| `nb_education_500m` | Nombre d'écoles dans un rayon de 500 m |
+| `distance_sante_plus_proche` | Distance en mètres au soin de santé le plus proche |
+| `nb_sante_500m` | Nombre d'équipements de santé dans un rayon de 500 m |
+| `distance_commerce_plus_proche` | Distance en mètres au commerce le plus proche |
+| `nb_commerce_500m` | Nombre de commerces dans un rayon de 500 m |
+| `distance_loisirs_plus_proche` | Distance en mètres au lieu de loisirs le plus proche |
+| `nb_loisirs_500m` | Nombre de lieux de loisirs dans un rayon de 500 m |
+
+**Limites :** La BPE 2024 représente l'état actuel des équipements, pas celui au moment des transactions DVF. Certains équipements peuvent avoir ouvert ou fermé depuis.
+
+---
 
 ## Provenance, collecte et contraintes légales des données
 
-### Dataset principal : DVF
+### Localisation des fichiers
 
-Le dataset principal utilisé est DVF, pour Demandes de valeurs foncières. Il recense les ventes de biens fonciers et immobiliers réalisées sur les dernières années en France. Dans ce projet, il est utilisé pour extraire les transactions d'appartements situées à Paris et calculer une variable cible : le prix au m².
+Tous les datasets sont stockés localement et ne sont pas versionnés sur GitHub (`.gitignore` couvre `data/`). Le repository documente leur emplacement attendu.
 
-Le fichier utilisé a été téléchargé manuellement depuis les données DVF disponibles en open data. Il est placé localement dans le repository à l'emplacement suivant :
-
-`data/raw/dvf.csv`
-
-Ce fichier brut n'est pas versionné sur GitHub car il est volumineux. Le repository documente donc son emplacement attendu et son utilisation.
-
-### Dataset externe : stations de transport IDF
-
-Un second dataset est utilisé pour enrichir les données immobilières avec une variable d'accessibilité aux transports. Il s'agit du fichier des gares et stations du réseau ferré d'Île-de-France.
-
-Le fichier est placé dans le repository à l'emplacement suivant :
-
-`data/external/emplacement-des-gares-idf.csv`
-
-Ce dataset contient notamment les noms des stations, les modes de transport, les lignes et les coordonnées géographiques. Il permet de calculer des variables comme la distance à la station la plus proche ou le nombre de stations à proximité.
+| Dataset | Emplacement local | Source |
+|---|---|---|
+| DVF | `data/raw/dvf.csv` | data.gouv.fr — DVF open data |
+| Stations IDF | `data/external/emplacement-des-gares-idf.csv` | IDFM open data |
+| Espaces verts | `data/external/espaces_verts.csv` | OpenData Paris |
+| BPE 2024 | `data/external/BPE24.csv` | INSEE open data |
+| Dataset enrichi | `data/processed/dvf_paris_enriched.csv` | Produit par le notebook |
 
 ### Méthode de collecte
 
-Les deux datasets ont été obtenus par téléchargement manuel depuis des plateformes open data :
+Tous les datasets ont été obtenus par téléchargement manuel depuis des plateformes open data. Aucun scraping n'a été utilisé.
 
-- DVF : données ouvertes des valeurs foncières ;
-- Stations IDF : données ouvertes sur les gares et stations du réseau ferré d'Île-de-France.
+### Comment exécuter le notebook
 
-Aucune méthode de scraping n'a été utilisée. Il n'est donc pas nécessaire de créer un fichier `src/scraping.py`.
+```bash
+# Installer les dépendances
+pip install -r requirements.txt
+
+# Lancer le notebook
+jupyter notebook notebooks/exploration_data.ipynb
+```
+
+Le notebook `notebooks/exploration_data.ipynb` réalise en séquence : chargement DVF → EDA → merge transports → merge espaces verts → merge BPE → sauvegarde du dataset enrichi dans `data/processed/dvf_paris_enriched.csv`.
 
 ### Contraintes légales et usage
 
-Les données DVF sont disponibles en open data, mais elles peuvent contenir des informations sensibles liées aux transactions immobilières. Leur réutilisation ne doit pas permettre la ré-identification de personnes physiques ni l'indexation des données par des moteurs de recherche externes. L'analyse sera donc réalisée à un niveau agrégé et dans un objectif pédagogique, sans tentative d'identification d'individus ou de propriétaires.
+Les données DVF contiennent des informations sur des transactions immobilières réelles. Leur réutilisation est limitée à un usage agrégé et pédagogique, sans tentative de ré-identification de personnes. Les trois datasets externes (IDFM, OpenData Paris, INSEE) sont en licence ouverte et librement réutilisables.
 
-Le dataset des stations IDF est utilisé comme donnée géographique ouverte pour enrichir les transactions avec des informations de proximité aux transports.
+### Justification du choix des datasets
 
-### Justification du choix
-
-Le choix de DVF est pertinent car il fournit des prix de vente réellement observés sur le marché immobilier, contrairement à des prix d'annonces qui peuvent être biaisés. Le choix du dataset des stations IDF est pertinent car la proximité aux transports est un facteur susceptible d'influencer le prix au m² des appartements parisiens.
-
-Le croisement des deux sources permet donc de construire un dataset plus riche pour un modèle de régression supervisée.
+- **DVF** : prix de vente réellement observés (non des prix d'annonces biaisés)
+- **Stations IDF** : la proximité aux transports est un facteur classique de valorisation immobilière
+- **Espaces verts** : la présence de parcs est connue pour avoir un effet positif sur les prix de l'immobilier résidentiel
+- **BPE** : la densité en services (écoles, commerces, santé) reflète l'attractivité d'un quartier et influence directement les prix au m²
