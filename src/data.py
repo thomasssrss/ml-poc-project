@@ -169,27 +169,40 @@ def load_dataset_split() -> tuple[Any, Any, Any, Any]:
     """Charge, transforme et divise le dataset DVF Paris.
 
     Pipeline appliqué (documenté dans notebooks/feature_engineering.ipynb) :
-    1. Chargement de data/processed/dvf_paris_clean.csv
-    2. Suppression des colonnes inutiles et des fuites de données
-    3. Extraction des features temporelles (annee, mois)
-    4. Extraction de l'arrondissement depuis le code postal
-    5. Imputation des valeurs manquantes par la médiane
-    6. Merge des features géographiques si dvf_paris_enriched.csv existe
-    7. Sélection des features finales
-    8. Split 80/20 stratifié aléatoirement (random_state=42)
+    - Si dvf_paris_enriched.csv existe : chargement direct (toutes les features
+      géographiques déjà calculées par exploration_data.ipynb)
+    - Sinon : fallback sur dvf_paris_clean.csv (features DVF uniquement)
+    Dans les deux cas : extraction temporelle, arrondissement, imputation,
+    sélection des features finales, split 80/20.
 
     Returns:
         (X_train, X_test, y_train, y_test) — DataFrames et Series pandas.
     """
-    base_path = DATA_DIR / "processed" / "dvf_paris_clean.csv"
     enriched_path = DATA_DIR / "processed" / "dvf_paris_enriched.csv"
+    base_path = DATA_DIR / "processed" / "dvf_paris_clean.csv"
 
-    df = _load_base(base_path)
-    df = _drop_columns(df)
-    df = _extract_temporal_features(df)
-    df = _extract_arrondissement(df)
-    df = _impute_missing(df)
-    df = _merge_geo_features(df, enriched_path)
+    if enriched_path.exists():
+        df = _load_base(enriched_path)
+        # Le dataset enrichi a déjà prix_m2 et les features géo —
+        # on supprime uniquement les colonnes inutiles encore présentes
+        df = _drop_columns(df)
+        df = _extract_temporal_features(df)
+        df = _extract_arrondissement(df)
+        df = _impute_missing(df)
+        # Encodage OHE du mode de transport
+        if "mode_station_plus_proche" in df.columns:
+            mode_dummies = pd.get_dummies(
+                df["mode_station_plus_proche"], prefix="mode", drop_first=True
+            )
+            df = pd.concat([df, mode_dummies], axis=1)
+            df = df.drop(columns=["mode_station_plus_proche"])
+    else:
+        df = _load_base(base_path)
+        df = _drop_columns(df)
+        df = _extract_temporal_features(df)
+        df = _extract_arrondissement(df)
+        df = _impute_missing(df)
+
     df = _select_features(df)
 
     X = df.drop(columns=[TARGET])
