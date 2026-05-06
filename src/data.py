@@ -131,6 +131,18 @@ def _merge_geo_features(df: pd.DataFrame, enriched_path: Path) -> pd.DataFrame:
     return df
 
 
+def _add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Crée des features supplémentaires à partir des features existantes."""
+    # Log de la surface : relation non-linéaire avec le prix
+    df["log_surface"] = np.log1p(df["surface_reelle_bati"])
+
+    # Surface par pièce : proxy de la qualité / standing du bien
+    df["surface_par_piece"] = (
+        df["surface_reelle_bati"] / df["nombre_pieces_principales"].clip(lower=1)
+    )
+    return df
+
+
 def _select_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Conserve uniquement les features retenues + la cible.
@@ -139,6 +151,8 @@ def _select_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     base_features = [
         "surface_reelle_bati",
+        "log_surface",
+        "surface_par_piece",
         "nombre_pieces_principales",
         "arrondissement",
         "annee",
@@ -203,6 +217,7 @@ def load_dataset_split() -> tuple[Any, Any, Any, Any]:
         df = _extract_arrondissement(df)
         df = _impute_missing(df)
 
+    df = _add_engineered_features(df)
     df = _select_features(df)
 
     X = df.drop(columns=[TARGET])
