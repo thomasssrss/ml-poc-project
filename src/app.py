@@ -33,41 +33,157 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-/* ── Variables de couleur ─────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   IMPORT POLICES — Inter (corpo) + JetBrains Mono (labels/code)
+   ══════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+
+/* ── Variables ────────────────────────────────────────────────────────── */
 :root {
     --c-dark-green:   #052424;
+    --c-dark2:        #041d1d;
     --c-lime:         #abff02;
     --c-white:        #ffffff;
-    --c-glass:        rgba(255,255,255,0.06);
-    --c-glass-border: rgba(255,255,255,0.12);
-    --c-muted:        rgba(255,255,255,0.45);
+    --c-glass:        rgba(255,255,255,0.05);
+    --c-glass-border: rgba(255,255,255,0.11);
+    --c-muted:        rgba(255,255,255,0.42);
     --radius:         10px;
+    --font-main:      'Inter', sans-serif;
+    --font-mono:      'JetBrains Mono', monospace;
 }
 
-/* ── Fond global ──────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   POLICE GLOBALE
+   ══════════════════════════════════════════════════════════════════════ */
+html, body, [data-testid="stApp"],
+[data-testid="stApp"] * {
+    font-family: var(--font-main) !important;
+}
+
+/* ── Fond global ─────────────────────────────────────────────────────── */
 html, body, [data-testid="stApp"] {
     background-color: var(--c-dark-green) !important;
 }
 
-/* ── Sidebar ──────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   SIDEBAR / MENU DE NAVIGATION
+   ══════════════════════════════════════════════════════════════════════ */
 [data-testid="stSidebar"] {
-    background-color: #041d1d !important;
+    background-color: var(--c-dark2) !important;
     border-right: 1px solid var(--c-glass-border) !important;
+    padding-top: 0 !important;
 }
-[data-testid="stSidebar"] * {
+[data-testid="stSidebar"] > div:first-child {
+    padding-top: 2rem !important;
+}
+
+/* Logo / titre sidebar */
+[data-testid="stSidebar"] h1 {
+    font-family: var(--font-main) !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
     color: var(--c-white) !important;
+    margin-bottom: 0.25rem !important;
 }
-[data-testid="stSidebar"] .stRadio label {
+[data-testid="stSidebar"] strong {
+    font-family: var(--font-mono) !important;
+    font-size: 0.6rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: var(--c-lime) !important;
+}
+[data-testid="stSidebar"] .stMarkdown p {
+    font-family: var(--font-mono) !important;
+    font-size: 0.65rem !important;
+    letter-spacing: 0.08em !important;
+    color: var(--c-muted) !important;
+}
+
+/* ── Navigation radio → liens ──────────────────────────────────────── */
+/* Conteneur du label radio → pleine largeur, padding nav */
+[data-testid="stSidebar"] [data-testid="stRadio"] label {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    padding: 0.6rem 1rem !important;
+    margin: 0.1rem 0 !important;
+    border-radius: 8px !important;
+    border-left: 2px solid transparent !important;
+    cursor: pointer !important;
+    transition: background 0.15s ease, border-color 0.15s ease !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
+    background: rgba(255,255,255,0.06) !important;
+    border-left-color: rgba(171,255,2,0.4) !important;
+}
+/* Cacher l'indicateur radio (le cercle) */
+[data-testid="stSidebar"] [data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
+    display: none !important;
+}
+/* Texte du lien nav */
+[data-testid="stSidebar"] [data-testid="stRadio"] label p {
+    font-family: var(--font-main) !important;
     font-size: 0.875rem !important;
-    letter-spacing: 0.03em !important;
+    font-weight: 450 !important;
+    letter-spacing: 0.01em !important;
+    color: rgba(255,255,255,0.72) !important;
+    margin: 0 !important;
+    transition: color 0.15s ease !important;
+}
+/* Item sélectionné */
+[data-testid="stSidebar"] [data-testid="stRadio"] [aria-checked="true"] ~ div label,
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
+    background: rgba(171,255,2,0.08) !important;
+    border-left-color: var(--c-lime) !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) p {
+    color: var(--c-lime) !important;
+    font-weight: 500 !important;
 }
 
-/* ── Titres ───────────────────────────────────────────────────────────── */
-h1 { font-size: 2.25rem !important; font-weight: 400 !important; letter-spacing: -0.03em !important; }
-h2 { font-size: 1.5rem  !important; font-weight: 400 !important; letter-spacing: -0.02em !important; }
-h3 { font-size: 1.125rem !important; font-weight: 500 !important; }
+/* Titre de la section radio (label "Navigation") */
+[data-testid="stSidebar"] [data-testid="stRadio"] > label {
+    font-family: var(--font-mono) !important;
+    font-size: 0.6rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: var(--c-muted) !important;
+    padding: 0 0 0.5rem 0.25rem !important;
+    border: none !important;
+    margin: 0 !important;
+    background: transparent !important;
+}
 
-/* ── Métriques ────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   TYPOGRAPHIE PRINCIPALE
+   ══════════════════════════════════════════════════════════════════════ */
+h1 {
+    font-family: var(--font-main) !important;
+    font-size: 2.25rem !important;
+    font-weight: 400 !important;
+    letter-spacing: -0.035em !important;
+    line-height: 1.1 !important;
+}
+h2 {
+    font-family: var(--font-main) !important;
+    font-size: 1.375rem !important;
+    font-weight: 400 !important;
+    letter-spacing: -0.02em !important;
+}
+h3 {
+    font-family: var(--font-main) !important;
+    font-size: 1.1rem !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+}
+p, li { line-height: 1.6 !important; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   MÉTRIQUES
+   ══════════════════════════════════════════════════════════════════════ */
 [data-testid="metric-container"] {
     background: var(--c-glass) !important;
     border: 1px solid var(--c-glass-border) !important;
@@ -76,34 +192,38 @@ h3 { font-size: 1.125rem !important; font-weight: 500 !important; }
     backdrop-filter: blur(12px) !important;
 }
 [data-testid="metric-container"] label {
+    font-family: var(--font-mono) !important;
     color: var(--c-muted) !important;
-    font-size: 0.6875rem !important;
-    font-family: monospace !important;
-    letter-spacing: 0.12em !important;
+    font-size: 0.6rem !important;
+    letter-spacing: 0.14em !important;
     text-transform: uppercase !important;
 }
 [data-testid="metric-container"] [data-testid="stMetricValue"] {
+    font-family: var(--font-main) !important;
     font-size: 1.75rem !important;
     font-weight: 400 !important;
     color: var(--c-white) !important;
+    letter-spacing: -0.02em !important;
 }
 [data-testid="metric-container"] [data-testid="stMetricDelta"] {
+    font-family: var(--font-mono) !important;
     color: var(--c-lime) !important;
-    font-size: 0.75rem !important;
-    font-family: monospace !important;
+    font-size: 0.7rem !important;
 }
 
-/* ── Boutons principaux ───────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   BOUTONS
+   ══════════════════════════════════════════════════════════════════════ */
 .stButton > button[kind="primary"] {
     background-color: var(--c-lime) !important;
     color: var(--c-dark-green) !important;
     border: none !important;
     border-radius: 8px !important;
-    font-family: monospace !important;
+    font-family: var(--font-mono) !important;
     font-weight: 600 !important;
-    letter-spacing: 0.1em !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.12em !important;
     text-transform: uppercase !important;
-    font-size: 0.75rem !important;
     padding: 0.75rem 2rem !important;
     transition: background-color 0.2s ease, transform 0.15s ease !important;
 }
@@ -111,44 +231,59 @@ h3 { font-size: 1.125rem !important; font-weight: 500 !important; }
     background-color: #c5ff33 !important;
     transform: translateY(-1px) !important;
 }
+.stButton > button[kind="secondary"] {
+    background: var(--c-glass) !important;
+    border: 1px solid var(--c-glass-border) !important;
+    color: var(--c-white) !important;
+    border-radius: 8px !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.1em !important;
+}
 
-/* ── Inputs & Selects ─────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   INPUTS / SELECTS / SLIDERS
+   ══════════════════════════════════════════════════════════════════════ */
 [data-testid="stTextInput"] input,
-[data-testid="stNumberInput"] input,
-[data-baseweb="select"] {
+[data-testid="stNumberInput"] input {
     background: var(--c-glass) !important;
     border: 1px solid var(--c-glass-border) !important;
     border-radius: 8px !important;
     color: var(--c-white) !important;
-    font-family: monospace !important;
+    font-family: var(--font-mono) !important;
     font-size: 0.875rem !important;
 }
-[data-testid="stTextInput"] input:focus {
+[data-testid="stTextInput"] input:focus,
+[data-testid="stNumberInput"] input:focus {
     border-color: var(--c-lime) !important;
-    box-shadow: 0 0 0 2px rgba(171,255,2,0.2) !important;
+    box-shadow: 0 0 0 2px rgba(171,255,2,0.15) !important;
+}
+[data-baseweb="select"] {
+    background: var(--c-glass) !important;
+    border: 1px solid var(--c-glass-border) !important;
+    border-radius: 8px !important;
+}
+[data-baseweb="select"] * { color: var(--c-white) !important; }
+
+/* Slider thumb → lime */
+[data-testid="stSlider"] [role="slider"] {
+    background-color: var(--c-lime) !important;
+    border-color: var(--c-lime) !important;
 }
 
-/* ── Slider ───────────────────────────────────────────────────────────── */
-[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] {
-    background-color: var(--c-lime) !important;
-}
-[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stThumbValue"] {
-    color: var(--c-dark-green) !important;
-    background-color: var(--c-lime) !important;
-}
-
-/* ── Tabs ─────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   TABS
+   ══════════════════════════════════════════════════════════════════════ */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
     background: transparent !important;
     border-bottom: 1px solid var(--c-glass-border) !important;
-    gap: 0 !important;
 }
 [data-testid="stTabs"] [data-baseweb="tab"] {
     background: transparent !important;
     color: var(--c-muted) !important;
-    font-family: monospace !important;
-    font-size: 0.75rem !important;
-    letter-spacing: 0.1em !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.12em !important;
     text-transform: uppercase !important;
     border: none !important;
     padding: 0.75rem 1.5rem !important;
@@ -159,63 +294,41 @@ h3 { font-size: 1.125rem !important; font-weight: 500 !important; }
     border-bottom: 2px solid var(--c-lime) !important;
 }
 
-/* ── Tableaux / Dataframes ────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   DATAFRAMES / ALERTES / DIVERS
+   ══════════════════════════════════════════════════════════════════════ */
 [data-testid="stDataFrame"] {
     border: 1px solid var(--c-glass-border) !important;
     border-radius: var(--radius) !important;
     overflow: hidden !important;
 }
-
-/* ── Info / Success / Warning boxes ──────────────────────────────────── */
 [data-testid="stAlert"] {
     border-radius: var(--radius) !important;
     border: 1px solid var(--c-glass-border) !important;
     backdrop-filter: blur(12px) !important;
 }
 [data-testid="stAlert"][kind="info"] {
-    background: rgba(171,255,2,0.07) !important;
-    border-color: rgba(171,255,2,0.25) !important;
-    color: var(--c-white) !important;
+    background: rgba(171,255,2,0.06) !important;
+    border-color: rgba(171,255,2,0.22) !important;
 }
-
-/* ── Divider ──────────────────────────────────────────────────────────── */
 hr {
     border-color: var(--c-glass-border) !important;
-    margin: 1.5rem 0 !important;
+    margin: 1.25rem 0 !important;
 }
-
-/* ── Captions & small text ────────────────────────────────────────────── */
-.stCaption, small {
+.stCaption, small, [data-testid="stCaptionContainer"] {
+    font-family: var(--font-mono) !important;
     color: var(--c-muted) !important;
-    font-family: monospace !important;
-    font-size: 0.6875rem !important;
-    letter-spacing: 0.05em !important;
+    font-size: 0.65rem !important;
+    letter-spacing: 0.06em !important;
 }
-
-/* ── Sidebar title / caption ──────────────────────────────────────────── */
-[data-testid="stSidebar"] .stMarkdown p {
-    color: var(--c-muted) !important;
-    font-family: monospace !important;
-    font-size: 0.6875rem !important;
-    letter-spacing: 0.08em !important;
-}
-[data-testid="stSidebar"] strong {
-    color: var(--c-lime) !important;
-    font-size: 0.75rem !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
-}
-
-/* ── Map container ────────────────────────────────────────────────────── */
-[data-testid="stDeckGlJsonChart"], iframe {
-    border-radius: var(--radius) !important;
-    overflow: hidden !important;
-    border: 1px solid var(--c-glass-border) !important;
-}
-
-/* ── Checkbox ─────────────────────────────────────────────────────────── */
 [data-testid="stCheckbox"] label span {
     color: var(--c-white) !important;
+    font-family: var(--font-main) !important;
+}
+[data-testid="stDeckGlJsonChart"], .stMap iframe {
+    border-radius: var(--radius) !important;
+    border: 1px solid var(--c-glass-border) !important;
+    overflow: hidden !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -548,24 +661,37 @@ def compute_geo_adjustments(lat: float, lon: float, trees: dict) -> tuple[dict, 
 # Navigation
 # ---------------------------------------------------------------------------
 
-st.sidebar.title("🏠 Prix Immo Paris")
-st.sidebar.markdown("**Proof of Concept — DVF**")
-st.sidebar.divider()
+st.sidebar.markdown(
+    "<div style='padding:0.25rem 0 1.5rem 0.25rem'>"
+    "<div style='font-family:Inter,sans-serif;font-size:1.05rem;font-weight:600;"
+    "letter-spacing:-0.01em;color:#fff;margin-bottom:0.2rem'>Prix Immo Paris</div>"
+    "<div style='font-family:JetBrains Mono,monospace;font-size:0.6rem;font-weight:600;"
+    "letter-spacing:0.14em;text-transform:uppercase;color:#abff02'>POC · DVF</div>"
+    "</div>",
+    unsafe_allow_html=True,
+)
 
 page = st.sidebar.radio(
     "Navigation",
-    ["📋 Le Projet", "📊 Données brutes", "🔧 Feature Engineering", "🤖 Performances", "🏷️ Estimer un prix"],
+    ["Le Projet", "Données brutes", "Feature Engineering", "Performances", "Estimer un prix"],
+    format_func=lambda x: {
+        "Le Projet":           "⬡  Le Projet",
+        "Données brutes":      "⬡  Données brutes",
+        "Feature Engineering": "⬡  Feature Engineering",
+        "Performances":        "⬡  Performances",
+        "Estimer un prix":     "⬡  Estimer un prix",
+    }[x],
 )
 
 st.sidebar.divider()
-st.sidebar.caption("Données : DVF, IDFM, OpenData Paris, INSEE")
-st.sidebar.caption("Meilleur modèle : Random Forest (R²=0.565)")
+st.sidebar.caption("DVF · IDFM · OpenData Paris · INSEE")
+st.sidebar.caption("Random Forest  ·  R²=0.565  ·  MAE=1 412 €/m²")
 
 # ---------------------------------------------------------------------------
 # Page 1 — Le Projet
 # ---------------------------------------------------------------------------
 
-if page == "📋 Le Projet":
+if page == "Le Projet":
     st.title("🏠 Prédiction du prix au m² à Paris")
     st.subheader("Proof of Concept — Données DVF open data")
 
@@ -620,7 +746,7 @@ if page == "📋 Le Projet":
 # Page 2 — D4 Visualisation 1 : Données brutes
 # ---------------------------------------------------------------------------
 
-elif page == "📊 Données brutes":
+elif page == "Données brutes":
     st.title("📊 Visualisation 1 — Données brutes")
     st.markdown(
         "Prix au m² médian par arrondissement parisien — "
@@ -666,7 +792,7 @@ elif page == "📊 Données brutes":
 # Page 3 — D4 Visualisation 2 : Données transformées
 # ---------------------------------------------------------------------------
 
-elif page == "🔧 Feature Engineering":
+elif page == "Feature Engineering":
     st.title("🔧 Visualisation 2 — Données transformées")
     st.markdown(
         "Illustration des transformations appliquées avant modélisation "
@@ -744,7 +870,7 @@ elif page == "🔧 Feature Engineering":
 # Page 4 — D4 Visualisation 3 : Performances des modèles
 # ---------------------------------------------------------------------------
 
-elif page == "🤖 Performances":
+elif page == "Performances":
     st.title("🤖 Visualisation 3 — Performances des modèles")
     st.markdown("Comparaison des 5 modèles entraînés — test set : 22 348 transactions.")
 
@@ -802,7 +928,7 @@ elif page == "🤖 Performances":
 # Page 5 — D5 Application : Estimation interactive
 # ---------------------------------------------------------------------------
 
-elif page == "🏷️ Estimer un prix":
+elif page == "Estimer un prix":
     st.title("🏷️ Estimer le prix au m² d'un appartement parisien")
     st.markdown(
         "Deux modes d'estimation : par **arrondissement** (rapide) "
