@@ -6,10 +6,16 @@ Lancement :
 
 from __future__ import annotations
 
+import json
+import math
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import requests
 import streamlit as st
+from sklearn.neighbors import BallTree
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -55,6 +61,251 @@ METRICS_DF = pd.DataFrame({
     "RMSE (€/m²)": [2951, 2357, 2690, 2227, 2739],
     "R²": [0.236, 0.513, 0.365, 0.565, 0.342],
 })
+
+# Centroïdes approximatifs des arrondissements parisiens (lat, lon)
+ARR_CENTROIDS = {
+    1:  (48.8605, 2.3477), 2:  (48.8659, 2.3493), 3:  (48.8637, 2.3619),
+    4:  (48.8540, 2.3533), 5:  (48.8479, 2.3512), 6:  (48.8490, 2.3332),
+    7:  (48.8566, 2.3177), 8:  (48.8750, 2.3094), 9:  (48.8766, 2.3381),
+    10: (48.8766, 2.3599), 11: (48.8588, 2.3788), 12: (48.8407, 2.3939),
+    13: (48.8315, 2.3588), 14: (48.8303, 2.3244), 15: (48.8418, 2.2950),
+    16: (48.8636, 2.2722), 17: (48.8843, 2.3115), 18: (48.8927, 2.3444),
+    19: (48.8837, 2.3836), 20: (48.8637, 2.3985),
+}
+
+EARTH_RADIUS_M = 6_371_000
+
+# Répertoire des données externes (relatif à ce fichier)
+_EXT_DIR = Path(__file__).parent.parent / "data" / "external"
+
+# Bonus/malus selon le type de voie (en fraction du prix)
+VOIE_BONUS = {
+    "avenue":    0.05, "boulevard":  0.04, "place":      0.03,
+    "esplanade": 0.03, "cours":      0.02, "quai":       0.04,
+    "square":    0.01, "allée":      0.01, "rue":        0.00,
+    "villa":    -0.02, "cité":      -0.02, "passage":   -0.04,
+    "impasse":  -0.05, "ruelle":    -0.03, "sentier":   -0.03,
+}
+
+
+def geocode_adresse(adresse: str) -> dict | None:
+    """Géocode une adresse parisienne via l'API gouvernementale française."""
+    try:
+        r = requests.get(
+            "https://api-adresse.data.gouv.fr/search/",
+            params={"q": adresse, "limit": 1, "citycode": "75056"},
+            timeout=5,
+        )
+        data = r.json()
+        if not data["features"]:
+            return None
+        feat = data["features"][0]
+        props = feat["properties"]
+        return {
+            "label":   props.get("label", adresse),
+            "lat":     feat["geometry"]["coordinates"][1],
+            "lon":     feat["geometry"]["coordinates"][0],
+            "score":   props.get("score", 0),
+            "type":    props.get("type", ""),
+            "street":  props.get("street", props.get("name", "")),
+        }
+    except Exception:
+        return None
+
+
+def prix_par_localisation(lat: float, lon: float) -> float:
+    """
+    Calcule un prix au m² pondéré par la distance aux centroïdes de chaque
+    arrondissement (Inverse Distance Weighting).
+    Un point dans le 17e proche du 8e reçoit automatiquement une pondération
+    plus forte vers le prix du 8e.
+    """
+    poids_total = 0.0
+    prix_pondere = 0.0
+    for arr, (clat, clon) in ARR_CENTROIDS.items():
+        dist = math.sqrt((lat - clat) ** 2 + (lon - clon) ** 2)
+        dist = max(dist, 1e-6)
+        w = 1.0 / dist ** 2      # pondération inverse au carré de la distance
+        prix_pondere += w * PRIX_MOYEN_ARR[arr]
+        poids_total  += w
+    return prix_pondere / poids_total
+
+
+def bonus_type_voie(street: str) -> float:
+    """Retourne le bonus/malus selon le type de voie détecté."""
+    street_lower = street.lower()
+    for voie, bonus in VOIE_BONUS.items():
+        if street_lower.startswith(voie):
+            return bonus
+    return 0.0
+
+
+@st.cache_resource
+def load_geo_trees() -> dict:
+    """
+    Charge les datasets géographiques et construit les BallTrees (une seule fois).
+    Retourne un dict avec les arbres pour : stations, parcs, commerces, parking.
+    """
+    trees: dict = {}
+
+    # ── 1. Stations Métro / RER ───────────────────────────────────────────
+    try:
+        df_s = pd.read_csv(_EXT_DIR / "emplacement-des-gares-idf.csv", sep=";")
+        coords_raw = df_s["Geo Point"].str.split(", ", expand=True)
+        df_s["lat"] = pd.to_numeric(coords_raw[0], errors="coerce")
+        df_s["lon"] = pd.to_numeric(coords_raw[1], errors="coerce")
+        mask = (
+            df_s["lat"].between(48.7, 49.0)
+            & df_s["lon"].between(2.2, 2.55)
+            & df_s["mode"].isin(["METRO", "RER"])
+        )
+        df_s = df_s[mask].dropna(subset=["lat", "lon"])
+        trees["stations"] = BallTree(np.radians(df_s[["lat", "lon"]].values), metric="haversine")
+    except Exception:
+        trees["stations"] = None
+
+    # ── 2. Espaces verts significatifs (> 1 000 m²) ───────────────────────
+    try:
+        df_ev = pd.read_csv(_EXT_DIR / "espaces_verts.csv", sep=";")
+        ev_raw = df_ev["Geo point"].str.split(", ", expand=True)
+        df_ev["lat"] = pd.to_numeric(ev_raw[0], errors="coerce")
+        df_ev["lon"] = pd.to_numeric(ev_raw[1], errors="coerce")
+        df_ev = df_ev.dropna(subset=["lat", "lon"])
+        surface = pd.to_numeric(df_ev["Superficie totale réelle"], errors="coerce").fillna(0)
+        df_ev = df_ev[surface > 1000]
+        trees["parcs"] = BallTree(np.radians(df_ev[["lat", "lon"]].values), metric="haversine")
+    except Exception:
+        trees["parcs"] = None
+
+    # ── 3. Commerces parisiens (BPE) ──────────────────────────────────────
+    try:
+        df_bpe = pd.read_csv(
+            _EXT_DIR / "BPE24.csv", sep=";",
+            usecols=["TYPEQU", "LATITUDE", "LONGITUDE", "DEP"],
+            low_memory=False,
+        )
+        df_bpe = df_bpe[df_bpe["DEP"] == "75"]
+        # Restaurants, cafés, boulangeries, banques
+        com_types = ["B201", "B302", "B310", "B311"]
+        df_com = df_bpe[df_bpe["TYPEQU"].isin(com_types)].dropna(
+            subset=["LATITUDE", "LONGITUDE"]
+        )
+        trees["commerces"] = BallTree(
+            np.radians(df_com[["LATITUDE", "LONGITUDE"]].values), metric="haversine"
+        )
+    except Exception:
+        trees["commerces"] = None
+
+    # ── 4. Places de stationnement voiture ───────────────────────────────
+    try:
+        with open(_EXT_DIR / "stationnement-voie-publique-emplacements.json") as f:
+            parking_data = json.load(f)
+        rows = []
+        for feat in parking_data.get("features", []):
+            props = feat.get("properties", {})
+            regime = str(props.get("regpri", "")).upper()
+            if any(r in regime for r in ["PAYANT", "ROTATIF", "GRATUIT"]):
+                geo = feat.get("geometry", {})
+                if geo.get("type") == "Point":
+                    lon_p, lat_p = geo["coordinates"][:2]
+                    rows.append((lat_p, lon_p))
+        df_park = pd.DataFrame(rows, columns=["lat", "lon"])
+        trees["parking"] = BallTree(np.radians(df_park[["lat", "lon"]].values), metric="haversine")
+    except Exception:
+        trees["parking"] = None
+
+    return trees
+
+
+def compute_geo_adjustments(lat: float, lon: float, trees: dict) -> tuple[dict, dict]:
+    """
+    Calcule des bonus/malus de prix selon la proximité aux équipements.
+
+    Returns:
+        adjustments : dict {catégorie → fraction du prix}
+        details     : dict {catégorie → dict de métriques pour affichage}
+    """
+    pt = np.radians([[lat, lon]])
+    adjustments: dict = {}
+    details: dict = {}
+
+    # ── Transport ────────────────────────────────────────────────────────
+    if trees.get("stations") is not None:
+        dist_rad, _ = trees["stations"].query(pt, k=1)
+        dist_m = float(dist_rad[0, 0]) * EARTH_RADIUS_M
+        nb_500 = int(
+            trees["stations"].query_radius(pt, r=500 / EARTH_RADIUS_M, count_only=True)[0]
+        )
+        if dist_m < 200:
+            b = 0.025
+        elif dist_m < 400:
+            b = 0.015
+        elif dist_m < 700:
+            b = 0.0
+        else:
+            b = -0.015
+        if nb_500 > 3:
+            b += 0.015
+        adjustments["transport"] = b
+        details["transport"] = {
+            "label": f"Métro/RER le plus proche : {dist_m:.0f} m · {nb_500} stations ≤ 500 m",
+            "bonus_pct": b * 100,
+        }
+
+    # ── Espaces verts ─────────────────────────────────────────────────────
+    if trees.get("parcs") is not None:
+        dist_rad, _ = trees["parcs"].query(pt, k=1)
+        dist_m = float(dist_rad[0, 0]) * EARTH_RADIUS_M
+        if dist_m < 150:
+            b = 0.030
+        elif dist_m < 400:
+            b = 0.015
+        elif dist_m < 700:
+            b = 0.005
+        else:
+            b = 0.0
+        adjustments["parcs"] = b
+        details["parcs"] = {
+            "label": f"Parc le plus proche : {dist_m:.0f} m",
+            "bonus_pct": b * 100,
+        }
+
+    # ── Commerces ─────────────────────────────────────────────────────────
+    if trees.get("commerces") is not None:
+        nb_500 = int(
+            trees["commerces"].query_radius(pt, r=500 / EARTH_RADIUS_M, count_only=True)[0]
+        )
+        if nb_500 > 15:
+            b = 0.020
+        elif nb_500 > 8:
+            b = 0.010
+        else:
+            b = 0.0
+        adjustments["commerces"] = b
+        details["commerces"] = {
+            "label": f"Commerces dans 500 m : {nb_500}",
+            "bonus_pct": b * 100,
+        }
+
+    # ── Stationnement ─────────────────────────────────────────────────────
+    if trees.get("parking") is not None:
+        nb_300 = int(
+            trees["parking"].query_radius(pt, r=300 / EARTH_RADIUS_M, count_only=True)[0]
+        )
+        if nb_300 > 15:
+            b = 0.020
+        elif nb_300 > 5:
+            b = 0.010
+        else:
+            b = 0.0
+        adjustments["parking"] = b
+        details["parking"] = {
+            "label": f"Places de stationnement dans 300 m : {nb_300}",
+            "bonus_pct": b * 100,
+        }
+
+    return adjustments, details
+
 
 # ---------------------------------------------------------------------------
 # Navigation
@@ -317,111 +568,198 @@ elif page == "🤖 Performances":
 elif page == "🏷️ Estimer un prix":
     st.title("🏷️ Estimer le prix au m² d'un appartement parisien")
     st.markdown(
-        "Renseignez les caractéristiques du bien pour obtenir une estimation "
-        "basée sur **156 077 ventes DVF**."
+        "Deux modes d'estimation : par **arrondissement** (rapide) "
+        "ou par **adresse exacte** (plus précis — tient compte de la micro-localisation)."
     )
 
-    col_form, col_result = st.columns([1, 1])
+    tab_arr, tab_adresse = st.tabs(["🗺️ Par arrondissement", "📍 Par adresse (précis)"])
 
-    with col_form:
-        st.subheader("Caractéristiques du bien")
+    # ── Onglet 1 : par arrondissement ─────────────────────────────────────────
+    with tab_arr:
+        col_form, col_result = st.columns([1, 1])
 
-        arrondissement = st.selectbox(
-            "Arrondissement",
-            options=list(range(1, 21)),
-            format_func=lambda x: f"{x}e — {NOM_ARR[x]}",
-            index=10,
-        )
+        with col_form:
+            st.subheader("Caractéristiques du bien")
 
-        surface = st.slider(
-            "Surface (m²)", min_value=10, max_value=300, value=55, step=5,
-        )
-
-        nb_pieces = st.slider(
-            "Nombre de pièces", min_value=1, max_value=10, value=3,
-        )
-
-        annee = st.selectbox(
-            "Année de vente", options=[2022, 2023, 2024, 2025], index=2,
-        )
-
-        st.divider()
-        estimer = st.button("🔍 Estimer le prix", type="primary", use_container_width=True)
-
-    with col_result:
-        st.subheader("Résultat")
-
-        if estimer:
-            base = PRIX_MOYEN_ARR[arrondissement]
-
-            # Ajustements basés sur les patterns DVF
-            adj_surface  = -3.5 * (surface - 55)          # plus grand = légèrement moins cher/m²
-            adj_pieces   = 15 * (surface / max(nb_pieces, 1) - 20)  # ratio surface/pièces
-            adj_annee    = (annee - 2022) * 120            # tendance temporelle
-
-            prix_estime = int(base + adj_surface + adj_pieces + adj_annee)
-            prix_estime = max(3000, min(25000, prix_estime))
-            mae = 1412
-
-            st.metric(
-                label="Prix estimé au m²",
-                value=f"{prix_estime:,} €/m²",
-                delta=f"Fourchette : {max(3000, prix_estime - mae):,} – {min(25000, prix_estime + mae):,} €/m²",
+            arrondissement = st.selectbox(
+                "Arrondissement",
+                options=list(range(1, 21)),
+                format_func=lambda x: f"{x}e — {NOM_ARR[x]}",
+                index=10,
             )
-
-            prix_total = prix_estime * surface
-            st.metric(
-                label=f"Prix total estimé ({surface} m²)",
-                value=f"{prix_total:,} €",
-            )
-
+            surface = st.slider("Surface (m²)", min_value=10, max_value=300, value=55, step=5)
+            nb_pieces = st.slider("Nombre de pièces", min_value=1, max_value=10, value=3)
+            annee = st.selectbox("Année de vente", options=[2022, 2023, 2024, 2025], index=2)
             st.divider()
+            estimer_arr = st.button("🔍 Estimer le prix", type="primary", use_container_width=True, key="btn_arr")
 
-            # Comparaison avec arrondissements voisins
-            voisins_ids = sorted(
-                PRIX_MOYEN_ARR.keys(),
-                key=lambda k: abs(k - arrondissement),
-            )[:7]
-            df_comp = pd.DataFrame({
-                "Arrondissement": [f"{k}e" for k in sorted(voisins_ids)],
-                "Prix moyen (€/m²)": [PRIX_MOYEN_ARR[k] for k in sorted(voisins_ids)],
-                "Sélectionné": [k == arrondissement for k in sorted(voisins_ids)],
-            })
+        with col_result:
+            st.subheader("Résultat")
+            if estimer_arr:
+                base = PRIX_MOYEN_ARR[arrondissement]
+                adj_surface = -3.5 * (surface - 55)
+                adj_pieces  = 15 * (surface / max(nb_pieces, 1) - 20)
+                adj_annee   = (annee - 2022) * 120
+                prix_estime = int(max(3000, min(25000, base + adj_surface + adj_pieces + adj_annee)))
+                mae = 1412
 
-            fig_comp = px.bar(
-                df_comp,
-                x="Arrondissement", y="Prix moyen (€/m²)",
-                color="Sélectionné",
-                color_discrete_map={True: "#2ecc71", False: "#95a5a6"},
-                title="Comparaison avec les arrondissements proches",
+                st.metric("Prix estimé au m²", f"{prix_estime:,} €/m²",
+                          delta=f"Fourchette : {max(3000,prix_estime-mae):,} – {min(25000,prix_estime+mae):,} €/m²")
+                st.metric(f"Prix total ({surface} m²)", f"{prix_estime*surface:,} €")
+                st.divider()
+
+                voisins = sorted(PRIX_MOYEN_ARR.keys(), key=lambda k: abs(k - arrondissement))[:7]
+                df_comp = pd.DataFrame({
+                    "Arrondissement": [f"{k}e" for k in sorted(voisins)],
+                    "Prix moyen (€/m²)": [PRIX_MOYEN_ARR[k] for k in sorted(voisins)],
+                    "Sélectionné": [k == arrondissement for k in sorted(voisins)],
+                })
+                fig = px.bar(df_comp, x="Arrondissement", y="Prix moyen (€/m²)",
+                             color="Sélectionné",
+                             color_discrete_map={True: "#2ecc71", False: "#95a5a6"},
+                             title="Comparaison avec les arrondissements proches")
+                fig.update_layout(showlegend=False, height=300)
+                fig.add_hline(y=prix_estime, line_dash="dash", line_color="#2ecc71",
+                              annotation_text=f"Estimation : {prix_estime:,} €/m²")
+                st.plotly_chart(fig, use_container_width=True)
+                st.info(f"Base {arrondissement}e ({base:,} €/m²) · marge ±{mae:,} €/m²")
+            else:
+                st.info("Remplissez le formulaire et cliquez sur **Estimer le prix**.")
+
+    # ── Onglet 2 : par adresse ─────────────────────────────────────────────────
+    with tab_adresse:
+        st.markdown("""
+        **Pourquoi c'est plus précis ?**
+        Un appartement dans le 17e côté Parc Monceau vaut bien plus
+        qu'un autre dans le 17e côté Porte de Clichy.
+        En entrant l'adresse exacte, on calcule un prix pondéré par
+        la distance réelle aux différents quartiers parisiens.
+        """)
+
+        col_form2, col_result2 = st.columns([1, 1])
+
+        with col_form2:
+            st.subheader("Adresse du bien")
+
+            adresse_input = st.text_input(
+                "Adresse complète",
+                placeholder="Ex : 24 avenue de Wagram, Paris",
             )
-            fig_comp.update_layout(showlegend=False, height=300)
-            fig_comp.add_hline(
-                y=prix_estime, line_dash="dash", line_color="#2ecc71",
-                annotation_text=f"Estimation : {prix_estime:,} €/m²",
-            )
-            st.plotly_chart(fig_comp, use_container_width=True)
+            surface2   = st.slider("Surface (m²)", min_value=10, max_value=300, value=55, step=5, key="surf2")
+            nb_pieces2 = st.slider("Nombre de pièces", min_value=1, max_value=10, value=3, key="pieces2")
+            annee2     = st.selectbox("Année de vente", options=[2022, 2023, 2024, 2025], index=2, key="annee2")
+            st.divider()
+            estimer_adresse = st.button("📍 Estimer par adresse", type="primary",
+                                        use_container_width=True, key="btn_adresse")
 
-            st.info(
-                f"📊 **Méthodologie** : base {arrondissement}e arrondissement "
-                f"({base:,} €/m²) ajustée surface/pièces/année. "
-                f"Marge d'erreur ±{mae:,} €/m² (MAE Random Forest v2)."
-            )
+        with col_result2:
+            st.subheader("Résultat")
 
-        else:
-            st.markdown("""
-            #### Comment ça marche ?
+            if estimer_adresse:
+                if not adresse_input.strip():
+                    st.warning("Veuillez entrer une adresse.")
+                else:
+                    with st.spinner("Géocodage en cours..."):
+                        geo = geocode_adresse(adresse_input)
 
-            1. Choisissez l'**arrondissement**, la **surface** et le **nombre de pièces**
-            2. Cliquez sur **Estimer le prix**
-            3. Obtenez une estimation avec sa fourchette de confiance
+                    if geo is None or geo["score"] < 0.3:
+                        st.error("Adresse introuvable. Essayez avec plus de détails (numéro, rue, Paris).")
+                    else:
+                        st.success(f"📍 Adresse reconnue : **{geo['label']}**")
 
-            ---
-            **Modèle utilisé :** Random Forest (MAE = 1 412 €/m², R² = 0.565)
+                        # Chargement des arbres géographiques (mis en cache)
+                        with st.spinner("Calcul des proximités…"):
+                            trees = load_geo_trees()
+                            geo_adj, geo_details = compute_geo_adjustments(
+                                geo["lat"], geo["lon"], trees
+                            )
 
-            **Limites :** le modèle ne connaît pas l'étage, l'état du bien,
-            ni la présence d'un balcon ou d'une cave.
-            """)
+                        # Prix de base : micro-localisation IDW
+                        prix_geo = prix_par_localisation(geo["lat"], geo["lon"])
+
+                        # Bonus type de voie
+                        bonus_voie = bonus_type_voie(geo["street"])
+
+                        # Bonus équipements (somme de tous les ajustements géo)
+                        total_geo_bonus = sum(geo_adj.values())
+
+                        # Prix après tous les bonus de localisation
+                        prix_localise = prix_geo * (1 + bonus_voie + total_geo_bonus)
+
+                        # Ajustements bien (surface, pièces, année)
+                        adj_surface = -3.5 * (surface2 - 55)
+                        adj_pieces  = 15 * (surface2 / max(nb_pieces2, 1) - 20)
+                        adj_annee   = (annee2 - 2022) * 120
+
+                        prix_final = int(max(3000, min(25000,
+                                        prix_localise + adj_surface + adj_pieces + adj_annee)))
+                        mae = 1412
+
+                        st.metric("Prix estimé au m²", f"{prix_final:,} €/m²",
+                                  delta=f"Fourchette : {max(3000,prix_final-mae):,} – {min(25000,prix_final+mae):,} €/m²")
+                        st.metric(f"Prix total ({surface2} m²)", f"{prix_final*surface2:,} €")
+
+                        # ── Détail des ajustements ─────────────────────────────
+                        st.divider()
+                        st.markdown("**Détail des ajustements :**")
+
+                        type_voie = geo["street"].split()[0].lower() if geo["street"] else "rue"
+
+                        rows_detail = [
+                            ("Prix de base (micro-localisation IDW)", f"{prix_geo:,.0f} €/m²"),
+                            (f"Type de voie ({type_voie})",
+                             f"{'+' if bonus_voie>=0 else ''}{bonus_voie*100:.0f}%"),
+                        ]
+
+                        # Ajustements équipements
+                        cat_labels = {
+                            "transport":  "🚇 Transport (Métro/RER)",
+                            "parcs":      "🌳 Espaces verts",
+                            "commerces":  "🛍️ Commerces",
+                            "parking":    "🅿️ Stationnement",
+                        }
+                        for cat, info in geo_details.items():
+                            label = cat_labels.get(cat, cat)
+                            b = info["bonus_pct"]
+                            rows_detail.append((
+                                f"{label} — {info['label']}",
+                                f"{'+' if b>=0 else ''}{b:.1f}%",
+                            ))
+
+                        rows_detail += [
+                            ("Ajustement surface",
+                             f"{'+' if adj_surface>=0 else ''}{adj_surface:.0f} €/m²"),
+                            ("Ajustement pièces",
+                             f"{'+' if adj_pieces>=0 else ''}{adj_pieces:.0f} €/m²"),
+                            ("Ajustement année",
+                             f"{'+' if adj_annee>=0 else ''}{adj_annee:.0f} €/m²"),
+                            ("**Prix final estimé**", f"**{prix_final:,} €/m²**"),
+                        ]
+
+                        df_details = pd.DataFrame(rows_detail, columns=["Composante", "Valeur"])
+                        st.dataframe(df_details, use_container_width=True, hide_index=True)
+
+                        # Carte avec la position
+                        df_map = pd.DataFrame({"lat": [geo["lat"]], "lon": [geo["lon"]]})
+                        st.map(df_map, zoom=14)
+
+                        st.info(
+                            "📊 **Méthode** : prix IDW par micro-localisation + bonus/malus "
+                            "type de voie + ajustements de proximité calculés en temps réel "
+                            "sur les datasets Métro/RER, espaces verts, commerces et stationnement."
+                        )
+            else:
+                st.markdown("""
+                #### Exemple d'adresses à tester
+
+                - `15 avenue de Wagram, Paris` ← 17e côté 8e (premium)
+                - `10 rue de la Chapelle, Paris` ← 18e côté 19e (moins cher)
+                - `5 quai de Bourbon, Paris` ← Île Saint-Louis (4e, très cher)
+                - `20 rue des Pyrénées, Paris` ← 20e (abordable)
+
+                ---
+                **Marge d'erreur :** ±1 412 €/m² (MAE du meilleur modèle)
+                """)
 
 
 def build_app() -> None:
