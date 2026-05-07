@@ -131,6 +131,49 @@ def prix_par_localisation(lat: float, lon: float) -> float:
     return prix_pondere / poids_total
 
 
+def adj_etage_ascenseur(etage: int, ascenseur: bool) -> float:
+    """
+    Retourne l'ajustement de prix (fraction) selon l'étage et la présence d'un ascenseur.
+
+    Logique Paris :
+    - RDC (-4%) : moins lumineux, moins sécurisé, bruit de rue.
+    - 1er (-2%) : encore peu valorisé.
+    - 2e (0%) : référence neutre.
+    - 3e-4e (+1,5%) : bon compromis luminosité / accessibilité.
+    - 5e-6e (+3%) : vue dégagée, lumineux.
+    - 7e+ (+4%) : dernier étage souvent prisé.
+    Si pas d'ascenseur : malus supplémentaire croissant avec l'étage.
+    """
+    if etage == 0:
+        floor_bonus = -0.04
+    elif etage == 1:
+        floor_bonus = -0.02
+    elif etage == 2:
+        floor_bonus = 0.0
+    elif etage <= 4:
+        floor_bonus = 0.015
+    elif etage <= 6:
+        floor_bonus = 0.03
+    else:
+        floor_bonus = 0.04
+
+    if not ascenseur:
+        if etage <= 1:
+            no_lift_malus = 0.0
+        elif etage == 2:
+            no_lift_malus = -0.01
+        elif etage == 3:
+            no_lift_malus = -0.025
+        elif etage == 4:
+            no_lift_malus = -0.04
+        else:
+            no_lift_malus = -0.06
+    else:
+        no_lift_malus = 0.0
+
+    return floor_bonus + no_lift_malus
+
+
 def bonus_type_voie(street: str) -> float:
     """Retourne le bonus/malus selon le type de voie détecté."""
     street_lower = street.lower()
@@ -589,6 +632,14 @@ elif page == "🏷️ Estimer un prix":
             )
             surface = st.slider("Surface (m²)", min_value=10, max_value=300, value=55, step=5)
             nb_pieces = st.slider("Nombre de pièces", min_value=1, max_value=10, value=3)
+            etage = st.selectbox(
+                "Étage",
+                options=list(range(0, 10)),
+                format_func=lambda x: "RDC" if x == 0 else f"{x}e",
+                index=2,
+                key="etage1",
+            )
+            ascenseur = st.checkbox("Ascenseur", value=True, key="asc1")
             annee = st.selectbox("Année de vente", options=[2022, 2023, 2024, 2025], index=2)
             st.divider()
             estimer_arr = st.button("🔍 Estimer le prix", type="primary", use_container_width=True, key="btn_arr")
@@ -600,12 +651,19 @@ elif page == "🏷️ Estimer un prix":
                 adj_surface = -3.5 * (surface - 55)
                 adj_pieces  = 15 * (surface / max(nb_pieces, 1) - 20)
                 adj_annee   = (annee - 2022) * 120
-                prix_estime = int(max(3000, min(25000, base + adj_surface + adj_pieces + adj_annee)))
+                frac_etage  = adj_etage_ascenseur(etage, ascenseur)
+                adj_etage_v = base * frac_etage
+                prix_estime = int(max(3000, min(25000,
+                    base + adj_surface + adj_pieces + adj_annee + adj_etage_v)))
                 mae = 1412
 
                 st.metric("Prix estimé au m²", f"{prix_estime:,} €/m²",
                           delta=f"Fourchette : {max(3000,prix_estime-mae):,} – {min(25000,prix_estime+mae):,} €/m²")
                 st.metric(f"Prix total ({surface} m²)", f"{prix_estime*surface:,} €")
+
+                etage_label = "RDC" if etage == 0 else f"{etage}e"
+                asc_label = "avec ascenseur" if ascenseur else "sans ascenseur"
+                st.caption(f"Étage : {etage_label} · {asc_label} → {'+' if frac_etage>=0 else ''}{frac_etage*100:.1f}%")
                 st.divider()
 
                 voisins = sorted(PRIX_MOYEN_ARR.keys(), key=lambda k: abs(k - arrondissement))[:7]
@@ -647,6 +705,14 @@ elif page == "🏷️ Estimer un prix":
             )
             surface2   = st.slider("Surface (m²)", min_value=10, max_value=300, value=55, step=5, key="surf2")
             nb_pieces2 = st.slider("Nombre de pièces", min_value=1, max_value=10, value=3, key="pieces2")
+            etage2     = st.selectbox(
+                "Étage",
+                options=list(range(0, 10)),
+                format_func=lambda x: "RDC" if x == 0 else f"{x}e",
+                index=2,
+                key="etage2",
+            )
+            ascenseur2 = st.checkbox("Ascenseur", value=True, key="asc2")
             annee2     = st.selectbox("Année de vente", options=[2022, 2023, 2024, 2025], index=2, key="annee2")
             st.divider()
             estimer_adresse = st.button("📍 Estimer par adresse", type="primary",
@@ -686,13 +752,16 @@ elif page == "🏷️ Estimer un prix":
                         # Prix après tous les bonus de localisation
                         prix_localise = prix_geo * (1 + bonus_voie + total_geo_bonus)
 
-                        # Ajustements bien (surface, pièces, année)
+                        # Ajustements bien (surface, pièces, étage, année)
                         adj_surface = -3.5 * (surface2 - 55)
                         adj_pieces  = 15 * (surface2 / max(nb_pieces2, 1) - 20)
                         adj_annee   = (annee2 - 2022) * 120
+                        frac_etage2 = adj_etage_ascenseur(etage2, ascenseur2)
+                        adj_etage_v2 = prix_localise * frac_etage2
 
                         prix_final = int(max(3000, min(25000,
-                                        prix_localise + adj_surface + adj_pieces + adj_annee)))
+                                        prix_localise + adj_surface + adj_pieces
+                                        + adj_annee + adj_etage_v2)))
                         mae = 1412
 
                         st.metric("Prix estimé au m²", f"{prix_final:,} €/m²",
@@ -726,11 +795,15 @@ elif page == "🏷️ Estimer un prix":
                                 f"{'+' if b>=0 else ''}{b:.1f}%",
                             ))
 
+                        etage2_label = "RDC" if etage2 == 0 else f"{etage2}e"
+                        asc2_label   = "avec ascenseur" if ascenseur2 else "sans ascenseur"
                         rows_detail += [
                             ("Ajustement surface",
                              f"{'+' if adj_surface>=0 else ''}{adj_surface:.0f} €/m²"),
                             ("Ajustement pièces",
                              f"{'+' if adj_pieces>=0 else ''}{adj_pieces:.0f} €/m²"),
+                            (f"🏢 Étage ({etage2_label} · {asc2_label})",
+                             f"{'+' if frac_etage2>=0 else ''}{frac_etage2*100:.1f}%"),
                             ("Ajustement année",
                              f"{'+' if adj_annee>=0 else ''}{adj_annee:.0f} €/m²"),
                             ("**Prix final estimé**", f"**{prix_final:,} €/m²**"),
