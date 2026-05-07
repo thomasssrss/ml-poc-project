@@ -131,18 +131,19 @@ def prix_par_localisation(lat: float, lon: float) -> float:
     return prix_pondere / poids_total
 
 
-def adj_etage_ascenseur(etage: int, ascenseur: bool) -> float:
+def adj_etage_ascenseur(etage: int, sans_ascenseur: bool) -> float:
     """
-    Retourne l'ajustement de prix (fraction) selon l'étage et la présence d'un ascenseur.
+    Retourne l'ajustement de prix (fraction) selon l'étage et l'absence d'ascenseur.
 
     Logique Paris :
-    - RDC (-4%) : moins lumineux, moins sécurisé, bruit de rue.
-    - 1er (-2%) : encore peu valorisé.
-    - 2e (0%) : référence neutre.
-    - 3e-4e (+1,5%) : bon compromis luminosité / accessibilité.
-    - 5e-6e (+3%) : vue dégagée, lumineux.
-    - 7e+ (+4%) : dernier étage souvent prisé.
-    Si pas d'ascenseur : malus supplémentaire croissant avec l'étage.
+    - L'ascenseur est un équipement standard → sa présence ne crée pas de bonus.
+    - Son ABSENCE crée un malus progressif selon l'étage.
+
+    Bonus étage (luminosité, vue, calme) :
+    - RDC : -4%  |  1er : -2%  |  2e : 0%  |  3e-4e : +1,5%  |  5e-6e : +3%  |  7e+ : +4%
+
+    Malus supplémentaire si sans ascenseur :
+    - RDC/1er : 0%  |  2e : -1%  |  3e : -2,5%  |  4e : -4%  |  5e+ : -6%
     """
     if etage == 0:
         floor_bonus = -0.04
@@ -157,7 +158,7 @@ def adj_etage_ascenseur(etage: int, ascenseur: bool) -> float:
     else:
         floor_bonus = 0.04
 
-    if not ascenseur:
+    if sans_ascenseur:
         if etage <= 1:
             no_lift_malus = 0.0
         elif etage == 2:
@@ -639,7 +640,7 @@ elif page == "🏷️ Estimer un prix":
                 index=2,
                 key="etage1",
             )
-            ascenseur = st.checkbox("Ascenseur", value=True, key="asc1")
+            sans_ascenseur = st.checkbox("Sans ascenseur", value=False, key="asc1")
             annee = st.selectbox("Année de vente", options=[2022, 2023, 2024, 2025], index=2)
             st.divider()
             estimer_arr = st.button("🔍 Estimer le prix", type="primary", use_container_width=True, key="btn_arr")
@@ -651,7 +652,7 @@ elif page == "🏷️ Estimer un prix":
                 adj_surface = -3.5 * (surface - 55)
                 adj_pieces  = 15 * (surface / max(nb_pieces, 1) - 20)
                 adj_annee   = (annee - 2022) * 120
-                frac_etage  = adj_etage_ascenseur(etage, ascenseur)
+                frac_etage  = adj_etage_ascenseur(etage, sans_ascenseur)
                 adj_etage_v = base * frac_etage
                 prix_estime = int(max(3000, min(25000,
                     base + adj_surface + adj_pieces + adj_annee + adj_etage_v)))
@@ -662,7 +663,7 @@ elif page == "🏷️ Estimer un prix":
                 st.metric(f"Prix total ({surface} m²)", f"{prix_estime*surface:,} €")
 
                 etage_label = "RDC" if etage == 0 else f"{etage}e"
-                asc_label = "avec ascenseur" if ascenseur else "sans ascenseur"
+                asc_label = "sans ascenseur" if sans_ascenseur else "avec ascenseur"
                 st.caption(f"Étage : {etage_label} · {asc_label} → {'+' if frac_etage>=0 else ''}{frac_etage*100:.1f}%")
                 st.divider()
 
@@ -712,7 +713,7 @@ elif page == "🏷️ Estimer un prix":
                 index=2,
                 key="etage2",
             )
-            ascenseur2 = st.checkbox("Ascenseur", value=True, key="asc2")
+            sans_ascenseur2 = st.checkbox("Sans ascenseur", value=False, key="asc2")
             annee2     = st.selectbox("Année de vente", options=[2022, 2023, 2024, 2025], index=2, key="annee2")
             st.divider()
             estimer_adresse = st.button("📍 Estimer par adresse", type="primary",
@@ -756,7 +757,7 @@ elif page == "🏷️ Estimer un prix":
                         adj_surface = -3.5 * (surface2 - 55)
                         adj_pieces  = 15 * (surface2 / max(nb_pieces2, 1) - 20)
                         adj_annee   = (annee2 - 2022) * 120
-                        frac_etage2 = adj_etage_ascenseur(etage2, ascenseur2)
+                        frac_etage2 = adj_etage_ascenseur(etage2, sans_ascenseur2)
                         adj_etage_v2 = prix_localise * frac_etage2
 
                         prix_final = int(max(3000, min(25000,
@@ -796,7 +797,7 @@ elif page == "🏷️ Estimer un prix":
                             ))
 
                         etage2_label = "RDC" if etage2 == 0 else f"{etage2}e"
-                        asc2_label   = "avec ascenseur" if ascenseur2 else "sans ascenseur"
+                        asc2_label   = "sans ascenseur" if sans_ascenseur2 else "avec ascenseur"
                         rows_detail += [
                             ("Ajustement surface",
                              f"{'+' if adj_surface>=0 else ''}{adj_surface:.0f} €/m²"),
