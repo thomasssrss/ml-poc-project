@@ -780,7 +780,6 @@ elif page == "Estimer un prix":
                 key="etage1",
             )
             sans_ascenseur = st.checkbox("Sans ascenseur", value=False, key="asc1")
-            annee = st.selectbox("Année de vente", options=[2022, 2023, 2024, 2025], index=2)
             st.divider()
             estimer_arr = st.button("🔍 Estimer le prix", type="primary", use_container_width=True, key="btn_arr")
 
@@ -790,7 +789,8 @@ elif page == "Estimer un prix":
                 base = PRIX_MOYEN_ARR[arrondissement]
                 adj_surface = -3.5 * (surface - 55)
                 adj_pieces  = 15 * (surface / max(nb_pieces, 1) - 20)
-                adj_annee   = (annee - 2022) * 120
+                annee_courante = 2026
+                adj_annee   = (annee_courante - 2022) * 120
                 frac_etage  = adj_etage_ascenseur(etage, sans_ascenseur)
                 adj_etage_v = base * frac_etage
                 prix_estime = int(max(3000, min(25000,
@@ -853,7 +853,6 @@ elif page == "Estimer un prix":
                 key="etage2",
             )
             sans_ascenseur2 = st.checkbox("Sans ascenseur", value=False, key="asc2")
-            annee2     = st.selectbox("Année de vente", options=[2022, 2023, 2024, 2025], index=2, key="annee2")
             st.divider()
             estimer_adresse = st.button("📍 Estimer par adresse", type="primary",
                                         use_container_width=True, key="btn_adresse")
@@ -895,7 +894,7 @@ elif page == "Estimer un prix":
                         # Ajustements bien (surface, pièces, étage, année)
                         adj_surface = -3.5 * (surface2 - 55)
                         adj_pieces  = 15 * (surface2 / max(nb_pieces2, 1) - 20)
-                        adj_annee   = (annee2 - 2022) * 120
+                        adj_annee   = (2026 - 2022) * 120
                         frac_etage2 = adj_etage_ascenseur(etage2, sans_ascenseur2)
                         adj_etage_v2 = prix_localise * frac_etage2
 
@@ -944,7 +943,7 @@ elif page == "Estimer un prix":
                              f"{'+' if adj_pieces>=0 else ''}{adj_pieces:.0f} €/m²"),
                             (f"🏢 Étage ({etage2_label} · {asc2_label})",
                              f"{'+' if frac_etage2>=0 else ''}{frac_etage2*100:.1f}%"),
-                            ("Ajustement année",
+                            ("Tendance marché 2026",
                              f"{'+' if adj_annee>=0 else ''}{adj_annee:.0f} €/m²"),
                             ("**Prix final estimé**", f"**{prix_final:,} €/m²**"),
                         ]
