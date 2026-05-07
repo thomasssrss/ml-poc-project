@@ -1,0 +1,6 @@
+Modèle,MAE (€/m²),RMSE (€/m²),R²
+Régression Linéaire (v1),2026.0,2951.0,0.236
+Random Forest (v1),1572.0,2357.0,0.5126
+Gradient Boosting (v1),1825.0,2690.0,0.3652
+Random Forest v2 (log),1412.0,2227.0,0.565
+Gradient Boosting v2 (log),1826.0,2739.0,0.3422
