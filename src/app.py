@@ -28,6 +28,199 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# Thème personnalisé — inspiré du design system dark-green / lime
+# ---------------------------------------------------------------------------
+
+st.markdown("""
+<style>
+/* ── Variables de couleur ─────────────────────────────────────────────── */
+:root {
+    --c-dark-green:   #052424;
+    --c-lime:         #abff02;
+    --c-white:        #ffffff;
+    --c-glass:        rgba(255,255,255,0.06);
+    --c-glass-border: rgba(255,255,255,0.12);
+    --c-muted:        rgba(255,255,255,0.45);
+    --radius:         10px;
+}
+
+/* ── Fond global ──────────────────────────────────────────────────────── */
+html, body, [data-testid="stApp"] {
+    background-color: var(--c-dark-green) !important;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background-color: #041d1d !important;
+    border-right: 1px solid var(--c-glass-border) !important;
+}
+[data-testid="stSidebar"] * {
+    color: var(--c-white) !important;
+}
+[data-testid="stSidebar"] .stRadio label {
+    font-size: 0.875rem !important;
+    letter-spacing: 0.03em !important;
+}
+
+/* ── Titres ───────────────────────────────────────────────────────────── */
+h1 { font-size: 2.25rem !important; font-weight: 400 !important; letter-spacing: -0.03em !important; }
+h2 { font-size: 1.5rem  !important; font-weight: 400 !important; letter-spacing: -0.02em !important; }
+h3 { font-size: 1.125rem !important; font-weight: 500 !important; }
+
+/* ── Métriques ────────────────────────────────────────────────────────── */
+[data-testid="metric-container"] {
+    background: var(--c-glass) !important;
+    border: 1px solid var(--c-glass-border) !important;
+    border-radius: var(--radius) !important;
+    padding: 1rem 1.25rem !important;
+    backdrop-filter: blur(12px) !important;
+}
+[data-testid="metric-container"] label {
+    color: var(--c-muted) !important;
+    font-size: 0.6875rem !important;
+    font-family: monospace !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+}
+[data-testid="metric-container"] [data-testid="stMetricValue"] {
+    font-size: 1.75rem !important;
+    font-weight: 400 !important;
+    color: var(--c-white) !important;
+}
+[data-testid="metric-container"] [data-testid="stMetricDelta"] {
+    color: var(--c-lime) !important;
+    font-size: 0.75rem !important;
+    font-family: monospace !important;
+}
+
+/* ── Boutons principaux ───────────────────────────────────────────────── */
+.stButton > button[kind="primary"] {
+    background-color: var(--c-lime) !important;
+    color: var(--c-dark-green) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-family: monospace !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    font-size: 0.75rem !important;
+    padding: 0.75rem 2rem !important;
+    transition: background-color 0.2s ease, transform 0.15s ease !important;
+}
+.stButton > button[kind="primary"]:hover {
+    background-color: #c5ff33 !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ── Inputs & Selects ─────────────────────────────────────────────────── */
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-baseweb="select"] {
+    background: var(--c-glass) !important;
+    border: 1px solid var(--c-glass-border) !important;
+    border-radius: 8px !important;
+    color: var(--c-white) !important;
+    font-family: monospace !important;
+    font-size: 0.875rem !important;
+}
+[data-testid="stTextInput"] input:focus {
+    border-color: var(--c-lime) !important;
+    box-shadow: 0 0 0 2px rgba(171,255,2,0.2) !important;
+}
+
+/* ── Slider ───────────────────────────────────────────────────────────── */
+[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] {
+    background-color: var(--c-lime) !important;
+}
+[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stThumbValue"] {
+    color: var(--c-dark-green) !important;
+    background-color: var(--c-lime) !important;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid var(--c-glass-border) !important;
+    gap: 0 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+    background: transparent !important;
+    color: var(--c-muted) !important;
+    font-family: monospace !important;
+    font-size: 0.75rem !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    border: none !important;
+    padding: 0.75rem 1.5rem !important;
+    transition: color 0.2s ease !important;
+}
+[data-testid="stTabs"] [aria-selected="true"] {
+    color: var(--c-lime) !important;
+    border-bottom: 2px solid var(--c-lime) !important;
+}
+
+/* ── Tableaux / Dataframes ────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--c-glass-border) !important;
+    border-radius: var(--radius) !important;
+    overflow: hidden !important;
+}
+
+/* ── Info / Success / Warning boxes ──────────────────────────────────── */
+[data-testid="stAlert"] {
+    border-radius: var(--radius) !important;
+    border: 1px solid var(--c-glass-border) !important;
+    backdrop-filter: blur(12px) !important;
+}
+[data-testid="stAlert"][kind="info"] {
+    background: rgba(171,255,2,0.07) !important;
+    border-color: rgba(171,255,2,0.25) !important;
+    color: var(--c-white) !important;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────────── */
+hr {
+    border-color: var(--c-glass-border) !important;
+    margin: 1.5rem 0 !important;
+}
+
+/* ── Captions & small text ────────────────────────────────────────────── */
+.stCaption, small {
+    color: var(--c-muted) !important;
+    font-family: monospace !important;
+    font-size: 0.6875rem !important;
+    letter-spacing: 0.05em !important;
+}
+
+/* ── Sidebar title / caption ──────────────────────────────────────────── */
+[data-testid="stSidebar"] .stMarkdown p {
+    color: var(--c-muted) !important;
+    font-family: monospace !important;
+    font-size: 0.6875rem !important;
+    letter-spacing: 0.08em !important;
+}
+[data-testid="stSidebar"] strong {
+    color: var(--c-lime) !important;
+    font-size: 0.75rem !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+}
+
+/* ── Map container ────────────────────────────────────────────────────── */
+[data-testid="stDeckGlJsonChart"], iframe {
+    border-radius: var(--radius) !important;
+    overflow: hidden !important;
+    border: 1px solid var(--c-glass-border) !important;
+}
+
+/* ── Checkbox ─────────────────────────────────────────────────────────── */
+[data-testid="stCheckbox"] label span {
+    color: var(--c-white) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
 # Données de référence (issues de l'EDA sur le dataset DVF)
 # ---------------------------------------------------------------------------
 
