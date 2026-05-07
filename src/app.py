@@ -16,6 +16,7 @@ import plotly.express as px
 import requests
 import streamlit as st
 from sklearn.neighbors import BallTree
+from streamlit_option_menu import option_menu
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -28,307 +29,117 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Thème personnalisé — inspiré du design system dark-green / lime
+# CSS minimal — thème clair, police propre
 # ---------------------------------------------------------------------------
 
 st.markdown("""
 <style>
-/* ══════════════════════════════════════════════════════════════════════
-   IMPORT POLICES — Inter (corpo) + JetBrains Mono (labels/code)
-   ══════════════════════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
-/* ── Variables ────────────────────────────────────────────────────────── */
 :root {
-    --c-dark-green:   #052424;
-    --c-dark2:        #041d1d;
-    --c-lime:         #abff02;
-    --c-white:        #ffffff;
-    --c-glass:        rgba(255,255,255,0.05);
-    --c-glass-border: rgba(255,255,255,0.11);
-    --c-muted:        rgba(255,255,255,0.42);
-    --radius:         10px;
-    --font-main:      'Inter', sans-serif;
-    --font-mono:      'JetBrains Mono', monospace;
+    --c-accent: #1a1a1a;
+    --c-border: #e5e5e5;
+    --c-muted:  #6b6b6b;
+    --radius:   8px;
+    --font:     'Inter', -apple-system, sans-serif;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   POLICE GLOBALE
-   ══════════════════════════════════════════════════════════════════════ */
-html, body, [data-testid="stApp"],
-[data-testid="stApp"] * {
-    font-family: var(--font-main) !important;
+/* Police globale */
+html, body, [data-testid="stApp"], [data-testid="stApp"] * {
+    font-family: var(--font) !important;
+    color: #1a1a1a;
 }
 
-/* ── Fond global ─────────────────────────────────────────────────────── */
-html, body, [data-testid="stApp"] {
-    background-color: var(--c-dark-green) !important;
+/* Cacher la sidebar Streamlit — menu horizontal à la place */
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+
+/* Contenu principal — pas de marge gauche sans sidebar */
+.main .block-container {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    max-width: 1200px !important;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   SIDEBAR / MENU DE NAVIGATION
-   ══════════════════════════════════════════════════════════════════════ */
-[data-testid="stSidebar"] {
-    background-color: var(--c-dark2) !important;
-    border-right: 1px solid var(--c-glass-border) !important;
-    padding-top: 0 !important;
-}
-[data-testid="stSidebar"] > div:first-child {
-    padding-top: 2rem !important;
-}
+/* Titres */
+h1 { font-size: 2rem !important; font-weight: 600 !important; letter-spacing: -0.02em !important; color: #1a1a1a !important; }
+h2 { font-size: 1.35rem !important; font-weight: 600 !important; color: #1a1a1a !important; }
+h3 { font-size: 1.05rem !important; font-weight: 500 !important; color: #1a1a1a !important; }
+p, li { line-height: 1.65 !important; color: #1a1a1a !important; }
 
-/* Logo / titre sidebar */
-[data-testid="stSidebar"] h1 {
-    font-family: var(--font-main) !important;
-    font-size: 1rem !important;
-    font-weight: 600 !important;
-    letter-spacing: -0.01em !important;
-    color: var(--c-white) !important;
-    margin-bottom: 0.25rem !important;
-}
-[data-testid="stSidebar"] strong {
-    font-family: var(--font-mono) !important;
-    font-size: 0.6rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.14em !important;
-    text-transform: uppercase !important;
-    color: var(--c-lime) !important;
-}
-[data-testid="stSidebar"] .stMarkdown p {
-    font-family: var(--font-mono) !important;
-    font-size: 0.65rem !important;
-    letter-spacing: 0.08em !important;
-    color: var(--c-muted) !important;
-}
-
-/* ── Navigation radio → liens ──────────────────────────────────────── */
-/* Conteneur du label radio → pleine largeur, padding nav */
-[data-testid="stSidebar"] [data-testid="stRadio"] label {
-    display: flex !important;
-    align-items: center !important;
-    width: 100% !important;
-    padding: 0.6rem 1rem !important;
-    margin: 0.1rem 0 !important;
-    border-radius: 8px !important;
-    border-left: 2px solid transparent !important;
-    cursor: pointer !important;
-    transition: background 0.15s ease, border-color 0.15s ease !important;
-}
-[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
-    background: rgba(255,255,255,0.06) !important;
-    border-left-color: rgba(171,255,2,0.4) !important;
-}
-/* Cacher l'indicateur radio (le cercle) */
-[data-testid="stSidebar"] [data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
-    display: none !important;
-}
-/* Texte du lien nav */
-[data-testid="stSidebar"] [data-testid="stRadio"] label p {
-    font-family: var(--font-main) !important;
-    font-size: 0.875rem !important;
-    font-weight: 450 !important;
-    letter-spacing: 0.01em !important;
-    color: rgba(255,255,255,0.72) !important;
-    margin: 0 !important;
-    transition: color 0.15s ease !important;
-}
-/* Item sélectionné */
-[data-testid="stSidebar"] [data-testid="stRadio"] [aria-checked="true"] ~ div label,
-[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
-    background: rgba(171,255,2,0.08) !important;
-    border-left-color: var(--c-lime) !important;
-}
-[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) p {
-    color: var(--c-lime) !important;
-    font-weight: 500 !important;
-}
-
-/* Titre de la section radio (label "Navigation") */
-[data-testid="stSidebar"] [data-testid="stRadio"] > label {
-    font-family: var(--font-mono) !important;
-    font-size: 0.6rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.14em !important;
-    text-transform: uppercase !important;
-    color: var(--c-muted) !important;
-    padding: 0 0 0.5rem 0.25rem !important;
-    border: none !important;
-    margin: 0 !important;
-    background: transparent !important;
-}
-
-/* ══════════════════════════════════════════════════════════════════════
-   TYPOGRAPHIE PRINCIPALE
-   ══════════════════════════════════════════════════════════════════════ */
-h1 {
-    font-family: var(--font-main) !important;
-    font-size: 2.25rem !important;
-    font-weight: 400 !important;
-    letter-spacing: -0.035em !important;
-    line-height: 1.1 !important;
-}
-h2 {
-    font-family: var(--font-main) !important;
-    font-size: 1.375rem !important;
-    font-weight: 400 !important;
-    letter-spacing: -0.02em !important;
-}
-h3 {
-    font-family: var(--font-main) !important;
-    font-size: 1.1rem !important;
-    font-weight: 500 !important;
-    letter-spacing: -0.01em !important;
-}
-p, li { line-height: 1.6 !important; }
-
-/* ══════════════════════════════════════════════════════════════════════
-   MÉTRIQUES
-   ══════════════════════════════════════════════════════════════════════ */
+/* Métriques */
 [data-testid="metric-container"] {
-    background: var(--c-glass) !important;
-    border: 1px solid var(--c-glass-border) !important;
+    background: #f8f8f8 !important;
+    border: 1px solid var(--c-border) !important;
     border-radius: var(--radius) !important;
     padding: 1rem 1.25rem !important;
-    backdrop-filter: blur(12px) !important;
 }
 [data-testid="metric-container"] label {
-    font-family: var(--font-mono) !important;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
     color: var(--c-muted) !important;
-    font-size: 0.6rem !important;
-    letter-spacing: 0.14em !important;
     text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
 }
 [data-testid="metric-container"] [data-testid="stMetricValue"] {
-    font-family: var(--font-main) !important;
-    font-size: 1.75rem !important;
-    font-weight: 400 !important;
-    color: var(--c-white) !important;
+    font-size: 1.6rem !important;
+    font-weight: 600 !important;
+    color: #1a1a1a !important;
     letter-spacing: -0.02em !important;
 }
-[data-testid="metric-container"] [data-testid="stMetricDelta"] {
-    font-family: var(--font-mono) !important;
-    color: var(--c-lime) !important;
-    font-size: 0.7rem !important;
-}
 
-/* ══════════════════════════════════════════════════════════════════════
-   BOUTONS
-   ══════════════════════════════════════════════════════════════════════ */
+/* Bouton principal */
 .stButton > button[kind="primary"] {
-    background-color: var(--c-lime) !important;
-    color: var(--c-dark-green) !important;
+    background-color: #1a1a1a !important;
+    color: #ffffff !important;
     border: none !important;
-    border-radius: 8px !important;
-    font-family: var(--font-mono) !important;
-    font-weight: 600 !important;
-    font-size: 0.7rem !important;
-    letter-spacing: 0.12em !important;
-    text-transform: uppercase !important;
-    padding: 0.75rem 2rem !important;
-    transition: background-color 0.2s ease, transform 0.15s ease !important;
+    border-radius: var(--radius) !important;
+    font-weight: 500 !important;
+    font-size: 0.875rem !important;
+    padding: 0.6rem 1.5rem !important;
+    transition: background-color 0.2s ease !important;
 }
 .stButton > button[kind="primary"]:hover {
-    background-color: #c5ff33 !important;
-    transform: translateY(-1px) !important;
-}
-.stButton > button[kind="secondary"] {
-    background: var(--c-glass) !important;
-    border: 1px solid var(--c-glass-border) !important;
-    color: var(--c-white) !important;
-    border-radius: 8px !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.7rem !important;
-    letter-spacing: 0.1em !important;
+    background-color: #333 !important;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   INPUTS / SELECTS / SLIDERS
-   ══════════════════════════════════════════════════════════════════════ */
+/* Inputs */
 [data-testid="stTextInput"] input,
 [data-testid="stNumberInput"] input {
-    background: var(--c-glass) !important;
-    border: 1px solid var(--c-glass-border) !important;
-    border-radius: 8px !important;
-    color: var(--c-white) !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.875rem !important;
+    border: 1px solid var(--c-border) !important;
+    border-radius: var(--radius) !important;
+    font-size: 0.9rem !important;
 }
-[data-testid="stTextInput"] input:focus,
-[data-testid="stNumberInput"] input:focus {
-    border-color: var(--c-lime) !important;
-    box-shadow: 0 0 0 2px rgba(171,255,2,0.15) !important;
-}
-[data-baseweb="select"] {
-    background: var(--c-glass) !important;
-    border: 1px solid var(--c-glass-border) !important;
-    border-radius: 8px !important;
-}
-[data-baseweb="select"] * { color: var(--c-white) !important; }
+[data-testid="stTextInput"] input:focus { border-color: #1a1a1a !important; }
 
-/* Slider thumb → lime */
-[data-testid="stSlider"] [role="slider"] {
-    background-color: var(--c-lime) !important;
-    border-color: var(--c-lime) !important;
-}
-
-/* ══════════════════════════════════════════════════════════════════════
-   TABS
-   ══════════════════════════════════════════════════════════════════════ */
+/* Tabs */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
     background: transparent !important;
-    border-bottom: 1px solid var(--c-glass-border) !important;
+    border-bottom: 1px solid var(--c-border) !important;
 }
 [data-testid="stTabs"] [data-baseweb="tab"] {
     background: transparent !important;
     color: var(--c-muted) !important;
-    font-family: var(--font-mono) !important;
-    font-size: 0.68rem !important;
-    letter-spacing: 0.12em !important;
-    text-transform: uppercase !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
     border: none !important;
-    padding: 0.75rem 1.5rem !important;
-    transition: color 0.2s ease !important;
+    padding: 0.75rem 1.25rem !important;
 }
 [data-testid="stTabs"] [aria-selected="true"] {
-    color: var(--c-lime) !important;
-    border-bottom: 2px solid var(--c-lime) !important;
+    color: #1a1a1a !important;
+    border-bottom: 2px solid #1a1a1a !important;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   DATAFRAMES / ALERTES / DIVERS
-   ══════════════════════════════════════════════════════════════════════ */
+/* Dataframes & alertes */
 [data-testid="stDataFrame"] {
-    border: 1px solid var(--c-glass-border) !important;
+    border: 1px solid var(--c-border) !important;
     border-radius: var(--radius) !important;
-    overflow: hidden !important;
 }
-[data-testid="stAlert"] {
-    border-radius: var(--radius) !important;
-    border: 1px solid var(--c-glass-border) !important;
-    backdrop-filter: blur(12px) !important;
-}
-[data-testid="stAlert"][kind="info"] {
-    background: rgba(171,255,2,0.06) !important;
-    border-color: rgba(171,255,2,0.22) !important;
-}
-hr {
-    border-color: var(--c-glass-border) !important;
-    margin: 1.25rem 0 !important;
-}
-.stCaption, small, [data-testid="stCaptionContainer"] {
-    font-family: var(--font-mono) !important;
+[data-testid="stAlert"] { border-radius: var(--radius) !important; }
+hr { border-color: var(--c-border) !important; }
+.stCaption, [data-testid="stCaptionContainer"] {
     color: var(--c-muted) !important;
-    font-size: 0.65rem !important;
-    letter-spacing: 0.06em !important;
-}
-[data-testid="stCheckbox"] label span {
-    color: var(--c-white) !important;
-    font-family: var(--font-main) !important;
-}
-[data-testid="stDeckGlJsonChart"], .stMap iframe {
-    border-radius: var(--radius) !important;
-    border: 1px solid var(--c-glass-border) !important;
-    overflow: hidden !important;
+    font-size: 0.78rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -661,31 +472,40 @@ def compute_geo_adjustments(lat: float, lon: float, trees: dict) -> tuple[dict, 
 # Navigation
 # ---------------------------------------------------------------------------
 
-st.sidebar.markdown(
-    "<div style='padding:0.25rem 0 1.5rem 0.25rem'>"
-    "<div style='font-family:Inter,sans-serif;font-size:1.05rem;font-weight:600;"
-    "letter-spacing:-0.01em;color:#fff;margin-bottom:0.2rem'>Prix Immo Paris</div>"
-    "<div style='font-family:JetBrains Mono,monospace;font-size:0.6rem;font-weight:600;"
-    "letter-spacing:0.14em;text-transform:uppercase;color:#abff02'>POC · DVF</div>"
-    "</div>",
-    unsafe_allow_html=True,
+page = option_menu(
+    menu_title=None,
+    options=["Le Projet", "Données brutes", "Feature Engineering", "Performances", "Estimer un prix"],
+    icons=["house", "bar-chart", "tools", "cpu", "tag"],
+    orientation="horizontal",
+    styles={
+        "container": {
+            "padding": "0",
+            "background-color": "#ffffff",
+            "border-bottom": "1px solid #e5e5e5",
+            "margin-bottom": "1.5rem",
+        },
+        "nav": {
+            "justify-content": "flex-start",
+            "gap": "0",
+        },
+        "nav-link": {
+            "font-family": "Inter, sans-serif",
+            "font-size": "0.875rem",
+            "font-weight": "450",
+            "color": "#6b6b6b",
+            "padding": "0.85rem 1.25rem",
+            "border-radius": "0",
+            "border-bottom": "2px solid transparent",
+        },
+        "nav-link-selected": {
+            "background-color": "transparent",
+            "color": "#1a1a1a",
+            "font-weight": "600",
+            "border-bottom": "2px solid #1a1a1a",
+        },
+        "icon": {"font-size": "0.85rem"},
+    },
 )
-
-page = st.sidebar.radio(
-    "Navigation",
-    ["Le Projet", "Données brutes", "Feature Engineering", "Performances", "Estimer un prix"],
-    format_func=lambda x: {
-        "Le Projet":           "⬡  Le Projet",
-        "Données brutes":      "⬡  Données brutes",
-        "Feature Engineering": "⬡  Feature Engineering",
-        "Performances":        "⬡  Performances",
-        "Estimer un prix":     "⬡  Estimer un prix",
-    }[x],
-)
-
-st.sidebar.divider()
-st.sidebar.caption("DVF · IDFM · OpenData Paris · INSEE")
-st.sidebar.caption("Random Forest  ·  R²=0.565  ·  MAE=1 412 €/m²")
 
 # ---------------------------------------------------------------------------
 # Page 1 — Le Projet
