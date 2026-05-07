@@ -249,6 +249,7 @@ Tous les datasets sont stockés localement et ne sont pas versionnés sur GitHub
 | Stations IDF | `data/external/emplacement-des-gares-idf.csv` | IDFM open data |
 | Espaces verts | `data/external/espaces_verts.csv` | OpenData Paris |
 | BPE 2024 | `data/external/BPE24.csv` | INSEE open data |
+| Stationnement | `data/external/stationnement-voie-publique-emplacements.json` | OpenData Paris |
 | Dataset enrichi | `data/processed/dvf_paris_enriched.csv` | Produit par le notebook |
 
 ### Méthode de collecte
@@ -267,9 +268,11 @@ jupyter notebook notebooks/exploration_data.ipynb
 
 Le notebook `notebooks/exploration_data.ipynb` réalise en séquence : chargement DVF → EDA → merge transports → merge espaces verts → merge BPE → sauvegarde du dataset enrichi dans `data/processed/dvf_paris_enriched.csv`.
 
+Le dataset stationnement est traité directement dans `notebooks/modelling.ipynb` (section 2b) via BallTree haversine, sans nécessiter de re-générer le dataset enrichi.
+
 ### Contraintes légales et usage
 
-Les données DVF contiennent des informations sur des transactions immobilières réelles. Leur réutilisation est limitée à un usage agrégé et pédagogique, sans tentative de ré-identification de personnes. Les trois datasets externes (IDFM, OpenData Paris, INSEE) sont en licence ouverte et librement réutilisables.
+Les données DVF contiennent des informations sur des transactions immobilières réelles. Leur réutilisation est limitée à un usage agrégé et pédagogique, sans tentative de ré-identification de personnes. Les quatre datasets externes (IDFM, OpenData Paris ×2, INSEE) sont en licence ouverte et librement réutilisables.
 
 ### Justification du choix des datasets
 
@@ -277,3 +280,4 @@ Les données DVF contiennent des informations sur des transactions immobilières
 - **Stations IDF** : la proximité aux transports est un facteur classique de valorisation immobilière
 - **Espaces verts** : la présence de parcs est connue pour avoir un effet positif sur les prix de l'immobilier résidentiel
 - **BPE** : la densité en services (écoles, commerces, santé) reflète l'attractivité d'un quartier et influence directement les prix au m²
+- **Stationnement** : à Paris où le stationnement est rare et coûteux, la proximité à des places de stationnement voiture est un facteur de confort pour les résidents et peut influencer la valeur perçue d'un bien
