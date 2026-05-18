@@ -7,12 +7,14 @@ le split (X_train, X_test, y_train, y_test) prêt pour la modélisation.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import BallTree
 
 from config import DATA_DIR
 
@@ -143,6 +145,54 @@ def _add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _add_parking_features(
+    X_train: pd.DataFrame, X_test: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Ajoute les features de stationnement si le JSON est disponible."""
+    parking_path = DATA_DIR / "external" / "stationnement-voie-publique-emplacements.json"
+    if not parking_path.exists():
+        return X_train, X_test
+
+    with open(parking_path) as f:
+        raw = json.load(f)
+
+    rows = []
+    for feat in raw if isinstance(raw, list) else raw.get("features", []):
+        if isinstance(raw, list):
+            props = feat
+            regime = str(props.get("regpri", "")).upper()
+            geo_pt = props.get("geo_point_2d", {})
+            if isinstance(geo_pt, dict) and any(
+                r in regime for r in ["PAYANT", "ROTATIF", "GRATUIT"]
+            ):
+                rows.append((geo_pt.get("lat", 0), geo_pt.get("lon", 0)))
+        else:
+            props = feat.get("properties", {})
+            regime = str(props.get("regpri", "")).upper()
+            if any(r in regime for r in ["PAYANT", "ROTATIF", "GRATUIT"]):
+                geo = feat.get("geometry", {})
+                if geo.get("type") == "Point":
+                    lon_p, lat_p = geo["coordinates"][:2]
+                    rows.append((lat_p, lon_p))
+
+    if not rows:
+        return X_train, X_test
+
+    df_park = pd.DataFrame(rows, columns=["lat", "lon"])
+    tree = BallTree(np.radians(df_park[["lat", "lon"]].values), metric="haversine")
+    radius_300 = 300 / 6_371_000
+
+    for split_df in (X_train, X_test):
+        coords = np.radians(split_df[["latitude", "longitude"]].values)
+        dist_rad, _ = tree.query(coords, k=1)
+        split_df["distance_parking_plus_proche"] = dist_rad[:, 0] * 6_371_000
+        split_df["nb_parkings_500m"] = tree.query_radius(
+            coords, r=radius_300 * (500 / 300), count_only=True
+        )
+
+    return X_train, X_test
+
+
 def _select_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Conserve uniquement les features retenues + la cible.
@@ -226,5 +276,15 @@ def load_dataset_split() -> tuple[Any, Any, Any, Any]:
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
     )
+
+    # Target encoding arrondissement — calculé sur le train uniquement (pas de fuite)
+    arr_mean = y_train.groupby(X_train["arrondissement"]).mean()
+    X_train = X_train.copy()
+    X_test = X_test.copy()
+    X_train["arrondissement_prix_moyen"] = X_train["arrondissement"].map(arr_mean)
+    X_test["arrondissement_prix_moyen"] = X_test["arrondissement"].map(arr_mean)
+
+    # Features de stationnement (optionnel — requiert data/external/stationnement-*.json)
+    X_train, X_test = _add_parking_features(X_train, X_test)
 
     return X_train, X_test, y_train, y_test

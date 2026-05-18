@@ -1,238 +1,191 @@
-# ML Project Template
+# Prédiction du prix au m² — Appartements parisiens (DVF)
 
-This repository is the base template that each student will fork and adapt for the final machine learning proof-of-concept project.
+Proof of Concept ML : prédiction du prix au m² des appartements parisiens à partir des données open data DVF (Demandes de Valeurs Foncières), enrichies avec des données géographiques (transports, espaces verts, équipements INSEE, stationnement).
 
-The template already defines the project structure and the main execution workflow. Your job as a student is to plug your own dataset loading logic, trained models, evaluation metrics, and Streamlit presentation into the fixed contracts described below.
+## Résultats
 
-## Repository Structure
+| Modèle | MAE (€/m²) | RMSE (€/m²) | R² |
+|---|---|---|---|
+| Régression Linéaire | 2 026 | 2 951 | 0,236 |
+| Random Forest | 1 572 | 2 357 | 0,513 |
+| Gradient Boosting | 1 825 | 2 690 | 0,365 |
+| **Random Forest v2 (log-transform)** | **1 412** | **2 227** | **0,565** |
+| Gradient Boosting v2 (log-transform) | 1 826 | 2 739 | 0,342 |
 
-- `deliverables/`: markdown files containing all assignements
-- `deliverables/assignement1.md`: first assignement due (5 in total)
-- `data/`: raw and processed data files
-- `logs/`: log files generated during execution
-- `models/`: trained machine learning models saved to disk
-- `notebooks/`: Jupyter notebooks for analysis and experimentation
-- `plots/`: generated visualizations
-- `results/`: evaluation outputs, including model comparison tables
-- `scripts/`: executable project scripts
-- `scripts/main.py`: main entry point for evaluating models and launching the app
-- `src/`: project source code
-- `src/config.py`: project paths, model registry, and Streamlit configuration
-- `src/data.py`: student-implemented dataset loading function
-- `src/metrics.py`: student-implemented metric computation function
-- `src/app.py`: fixed Streamlit entry point that students must customize
-- `tests/`: optional tests
-- `.env`: environment variables if your project needs them
+**Meilleur modèle :** Random Forest v2 — MAE = 1 412 €/m² (~14 % du prix médian de 10 300 €/m²)
 
-## Expected Workflow
+---
 
-When you run:
+## Installation
 
 ```bash
-python scripts/main.py
-```
-
-the template will do the following:
-
-1. read the list of trained models from `src/config.py`,
-2. call your dataset loading function from `src/data.py`,
-3. load each serialized model from `models/`,
-4. run predictions on the test split,
-5. call your metric computation function from `src/metrics.py`,
-6. save the results to `results/model_metrics.csv`,
-7. print the metrics in the terminal,
-8. launch the Streamlit app on `localhost`.
-
-## What You Must Update
-
-### 1. Register your trained models in `src/config.py`
-
-Replace the example `MODELS` dictionary with your own trained models.
-
-Each entry must define at least:
-
-- `name`
-- `description`
-- `path`
-
-Example:
-
-```python
-MODELS = {
-    "log_reg": {
-        "name": "Logistic Regression",
-        "description": "Baseline classifier with standardized features.",
-        "path": MODELS_DIR / "log_reg.joblib",
-    },
-    "rf": {
-        "name": "Random Forest",
-        "description": "Tree ensemble tuned on the validation split.",
-        "path": MODELS_DIR / "random_forest.pkl",
-    },
-}
-```
-
-Supported model formats are:
-
-- `.joblib`
-- `.pkl`
-- `.pickle`
-
-Each saved object must expose a `.predict(X)` method.
-
-### 2. Implement the dataset loading function in `src/data.py`
-
-The file already exists and must keep this function name and signature:
-
-```python
-def load_dataset_split() -> tuple[Any, Any, Any, Any]:
-```
-
-It must return:
-
-```python
-(X_train, X_test, y_train, y_test)
-```
-
-Constraints:
-
-- `X_train` and `X_test` must be in a format accepted by every model in `MODELS`
-- `y_train` and `y_test` must contain the matching targets
-- `X_test` and `y_test` will be used by `scripts/main.py` for evaluation
-- Typical return types are `pandas.DataFrame`, `pandas.Series`, and/or `numpy.ndarray`
-
-Minimal example:
-
-```python
-import pandas as pd
-from sklearn.model_selection import train_test_split
-
-from config import DATA_DIR
-
-
-def load_dataset_split():
-    df = pd.read_csv(DATA_DIR / "processed_dataset.csv")
-    X = df.drop(columns=["target"])
-    y = df["target"]
-    return train_test_split(X, y, test_size=0.2, random_state=42)
-```
-
-### 3. Implement the metric computation function in `src/metrics.py`
-
-The file already exists and must keep this function name and signature:
-
-```python
-def compute_metrics(y_true: Any, y_pred: Any) -> dict[str, float]:
-```
-
-It must return a dictionary mapping metric names to numeric values.
-
-Example:
-
-```python
-from sklearn.metrics import accuracy_score, f1_score
-
-
-def compute_metrics(y_true, y_pred):
-    return {
-        "accuracy": accuracy_score(y_true, y_pred),
-        "f1": f1_score(y_true, y_pred, average="weighted"),
-    }
-```
-
-Constraints:
-
-- Use the same metric names for all evaluated models
-- Every metric value must be numeric and convertible to `float`
-- The returned dictionary is written directly to `results/model_metrics.csv`
-
-### 4. Customize the Streamlit application in `src/app.py`
-
-The file `src/app.py` is the fixed Streamlit entry point used by `scripts/main.py`.
-
-Keep this function name:
-
-```python
-def build_app() -> None:
-```
-
-You should update the placeholder app to present:
-
-- the business objective,
-- the dataset and key insights,
-- your visualizations,
-- model comparison results,
-- any prediction demo or interactive workflow relevant to your project.
-
-The template app already tries to display `results/model_metrics.csv` if it exists.
-
-## Recommended Student Workflow
-
-1. Fork this repository.
-2. Create and activate your virtual environment.
-3. Install dependencies:
-
-```bash
+git clone https://github.com/thomasssrss/ml-poc-project.git
+cd ml-poc-project
 pip install -r requirements.txt
 ```
 
-The template also reads `project-repo/.env` with `python-dotenv`. By default it contains:
+---
 
-```text
-PYTHONPATH=./src
-```
-
-This is used when `scripts/main.py` launches Streamlit so modules inside `src/` resolve as top-level imports such as `from config import ...` or `from app import build_app`.
-
-4. Add your data files to `data/`.
-5. Train and save your models into `models/`.
-6. Update `src/config.py`.
-7. Implement `src/data.py`.
-8. Implement `src/metrics.py`.
-9. Customize `src/app.py`.
-10. Run the full project:
+## Lancer l'application
 
 ```bash
+python main.py
+# ou
 python scripts/main.py
 ```
 
-## Output Produced by the Template
+Ce script :
+1. Charge le dataset de test et évalue les modèles configurés dans `src/config.py`
+2. Sauvegarde les métriques dans `results/model_metrics.csv`
+3. Lance l'application Streamlit sur **http://localhost:8501**
 
-After a successful run, you should have:
+> Si les données ne sont pas présentes, l'évaluation est ignorée et Streamlit se lance directement.
 
-- printed metrics in the terminal,
-- a CSV file at `results/model_metrics.csv`,
-- a Streamlit app running locally, by default at:
+Pour lancer uniquement l'application sans évaluation :
 
-```text
-http://localhost:8501
+```bash
+streamlit run src/app.py
 ```
 
-## Common Errors
+---
 
-### `NotImplementedError` from `data`
+## Données requises
 
-You have not implemented `load_dataset_split()` yet.
+Les fichiers de données ne sont pas versionnés (taille > 100 Mo). Télécharger et placer dans les dossiers indiqués :
 
-### `NotImplementedError` from `metrics`
+| Fichier | Dossier | Source |
+|---|---|---|
+| `dvf.csv` | `data/raw/` | [data.gouv.fr — DVF](https://www.data.gouv.fr/fr/datasets/demandes-de-valeurs-foncieres/) |
+| `emplacement-des-gares-idf.csv` | `data/external/` | [IDFM open data](https://data.iledefrance-mobilites.fr) |
+| `espaces_verts.csv` | `data/external/` | [OpenData Paris](https://opendata.paris.fr) |
+| `BPE24.csv` | `data/external/` | [INSEE BPE 2024](https://www.insee.fr/fr/statistiques/3568638) |
+| `stationnement-voie-publique-emplacements.json` | `data/external/` | [OpenData Paris](https://opendata.paris.fr) |
 
-You have not implemented `compute_metrics()` yet.
+---
 
-### `FileNotFoundError` for a model path
+## Reproduire l'entraînement complet
 
-One of the model files declared in `src/config.py` does not exist in `models/`.
+```bash
+# 1. Générer les datasets enrichis (EDA + merge géographique)
+jupyter notebook notebooks/exploration_data.ipynb
+# → data/processed/dvf_paris_enriched.csv
 
-### Model has no `predict` method
+# 2. Feature engineering documenté
+jupyter notebook notebooks/feature_engineering.ipynb
+# → data/processed/dataset_ml.csv
 
-The object loaded from disk is not a trained model compatible with the template evaluation flow.
+# 3. Entraîner et comparer les modèles
+jupyter notebook notebooks/modelling.ipynb
+# → models/linear_regression.pkl
+# → models/gradient_boosting.pkl
+# → models/gradient_boosting_v2.pkl
+# → models/random_forest.pkl        (167 Mo — non versionné)
+# → models/random_forest_v2.pkl     (842 Mo — non versionné)
+# → results/model_metrics.csv
+# → plots/comparaison_modeles.png, predictions_vs_reels.png, feature_importances.png
+```
 
-### Streamlit starts but shows only the placeholder page
+---
 
-You still need to customize `src/app.py` with your project content.
+## Structure du projet
 
-## Notes
+```
+ml-poc-project/
+│
+├── data/
+│   ├── raw/                          # DVF brut (non versionné)
+│   ├── external/                     # Datasets géographiques (non versionnés)
+│   └── processed/                    # Datasets nettoyés (non versionnés)
+│
+├── deliverables/                     # Livrables académiques
+│   ├── assignment1.md                # Proposition de projet
+│   ├── assignment2.md                # Données et features
+│   ├── assignment3.md                # Sélection des modèles
+│   ├── assignment4.md                # Visualisations
+│   └── assignment5.md                # Application Streamlit
+│
+├── models/                           # Modèles sérialisés
+│   ├── linear_regression.pkl         # Baseline (2,7 Ko — versionné)
+│   ├── gradient_boosting.pkl         # v1 (1,7 Mo — versionné)
+│   ├── gradient_boosting_v2.pkl      # v2 log-transform (3,5 Mo — versionné)
+│   ├── random_forest.pkl             # v1 (167 Mo — non versionné)
+│   └── random_forest_v2.pkl          # v2 log-transform (842 Mo — non versionné)
+│
+├── notebooks/
+│   ├── exploration_data.ipynb        # EDA + enrichissement géographique
+│   ├── feature_engineering.ipynb     # Preprocessing + FE documenté
+│   └── modelling.ipynb               # Entraînement + comparaison des modèles
+│
+├── plots/                            # Visualisations générées par les notebooks
+│
+├── results/
+│   └── model_metrics.csv             # Tableau comparatif des métriques
+│
+├── scripts/
+│   └── main.py                       # Pipeline principal (évaluation + Streamlit)
+│
+├── src/
+│   ├── app.py                        # Application Streamlit (5 pages)
+│   ├── config.py                     # Chemins et registre des modèles
+│   ├── data.py                       # Chargement, preprocessing, feature engineering
+│   ├── metrics.py                    # Calcul MAE, RMSE, R²
+│   ├── model_io.py                   # Chargement des fichiers .pkl / .joblib
+│   └── results.py                    # Sauvegarde CSV des métriques
+│
+├── main.py                           # Raccourci : python main.py
+├── requirements.txt
+└── README.md
+```
 
-- Keep `scripts/main.py` as the main orchestration entry point.
-- Keep the function names and signatures in `src/data.py`, `src/metrics.py`, and `src/app.py` unchanged.
-- Save your trained models before running the template.
-- Use the same evaluation logic for all registered models so the comparison remains fair.
+---
+
+## Application Streamlit
+
+L'application comprend 5 pages accessibles via une barre de navigation horizontale :
+
+| Page | Contenu |
+|---|---|
+| **Le Projet** | Tableau de bord — données, approche ML, résultats clés |
+| **Données brutes** | Prix médian par arrondissement (graphique interactif Plotly) |
+| **Feature Engineering** | Log-transform de la cible, features construites, transformations rejetées |
+| **Performances** | Comparaison MAE / RMSE / R² des 5 modèles |
+| **Estimer un prix** | Estimation interactive par arrondissement ou par adresse exacte |
+
+### Estimation par adresse
+
+Le mode précis géocode l'adresse (API `api-adresse.data.gouv.fr`) et calcule un prix ajusté par :
+- **Micro-localisation IDW** : pondération par distance aux 20 centroïdes d'arrondissements
+- **Type de voie** : avenue (+5 %), boulevard (+4 %), impasse (−5 %), etc.
+- **Proximité Métro/RER** : bonus jusqu'à +2,5 % si station < 200 m
+- **Espaces verts** : bonus jusqu'à +3 % si parc > 1 000 m² à moins de 150 m
+- **Commerces** : bonus si forte densité dans 500 m
+- **Stationnement** : bonus si places disponibles dans 300 m
+- **Étage et ascenseur** : bonus/malus selon le marché parisien
+
+---
+
+## Pipeline `scripts/main.py`
+
+```
+main()
+  ├── _validate_app_entrypoint()     — vérifie que app.py expose build_app()
+  ├── _validate_models_config()      — vérifie que config.MODELS est renseigné
+  ├── _load_dataset()                — appelle src/data.load_dataset_split()
+  ├── _evaluate_models()             — prédit + calcule MAE, RMSE, R² par modèle
+  ├── write_metrics()                — sauvegarde results/model_metrics.csv
+  └── _launch_streamlit()            — démarre streamlit run src/app.py
+```
+
+---
+
+## Modèles versionnés
+
+Les modèles inférieurs à 100 Mo sont inclus dans le dépôt et directement utilisables sans ré-entraînement :
+
+| Fichier | Taille | Algorithme | MAE |
+|---|---|---|---|
+| `models/linear_regression.pkl` | 2,7 Ko | Pipeline(RobustScaler + LinearRegression) | 2 026 €/m² |
+| `models/gradient_boosting.pkl` | 1,7 Mo | HistGradientBoostingRegressor (v1) | 1 825 €/m² |
+| `models/gradient_boosting_v2.pkl` | 3,5 Mo | HistGradientBoostingRegressor + log-transform | — |
+
+Les modèles Random Forest (167 Mo et 842 Mo) dépassent la limite GitHub de 100 Mo. Ils sont régénérés en exécutant `notebooks/modelling.ipynb`.

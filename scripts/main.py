@@ -86,31 +86,39 @@ def _evaluate_models(X_test: Any, y_test: Any) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
 
     for model_key, model_config in MODELS.items():
-        model = load_model(Path(model_config["path"]))
+        try:
+            model = load_model(Path(model_config["path"]))
+        except FileNotFoundError:
+            print(f"  [skip] {model_key} — fichier modèle introuvable : {model_config['path']}")
+            print(f"         Exécutez notebooks/modelling.ipynb pour régénérer les modèles.")
+            continue
 
         if not hasattr(model, "predict"):
-            raise TypeError(
-                f"Loaded object for model `{model_key}` does not expose a `predict` method."
-            )
+            print(f"  [skip] {model_key} — l'objet chargé n'expose pas de méthode predict.")
+            continue
 
-        y_pred = model.predict(X_test)
+        try:
+            y_pred = model.predict(X_test)
+        except Exception as exc:
+            print(f"  [skip] {model_key} — échec de la prédiction : {exc}")
+            continue
+
         metrics = compute_metrics(y_test, y_pred)
 
         if not isinstance(metrics, dict) or not metrics:
-            raise ValueError(
-                "metrics.compute_metrics() must return a non-empty dictionary."
-            )
+            print(f"  [skip] {model_key} — compute_metrics() a retourné un résultat vide.")
+            continue
 
         row: dict[str, object] = {
             "model_key": model_key,
             "model_name": model_config.get("name", model_key),
             "model_path": str(model_config["path"]),
         }
-
         for metric_name, metric_value in metrics.items():
             row[metric_name] = float(metric_value)
 
         rows.append(row)
+        print(f"  [ok]   {model_config.get('name', model_key)} — {metrics}")
 
     return rows
 
@@ -138,30 +146,41 @@ def _launch_streamlit() -> None:
 
 
 def main() -> None:
+    print("=" * 60)
+    print("  Prédiction du prix au m² — DVF Paris")
+    print("=" * 60)
+
     _validate_app_entrypoint()
-    _validate_models_config()
 
+    # Évaluation des modèles — optionnelle si les données ne sont pas disponibles
     try:
+        _validate_models_config()
+        print("\n[1/3] Chargement du dataset...")
         _, X_test, _, y_test = _load_dataset()
-    except NotImplementedError as exc:
-        raise NotImplementedError(
-            "Dataset loading is still a template placeholder. "
-            "Implement data.load_dataset_split()."
-        ) from exc
+        print(f"      {len(X_test):,} lignes de test chargées ({X_test.shape[1]} features)")
 
-    try:
+        print("\n[2/3] Évaluation des modèles...")
         metrics_rows = _evaluate_models(X_test, y_test)
-    except NotImplementedError as exc:
-        raise NotImplementedError(
-            "Metric computation is still a template placeholder. "
-            "Implement metrics.compute_metrics()."
-        ) from exc
 
-    metrics_df = write_metrics(metrics_rows)
+        if metrics_rows:
+            metrics_df = write_metrics(metrics_rows)
+            print("\n      Résultats sauvegardés dans results/model_metrics.csv")
+            print(metrics_df.to_string(index=False))
+        else:
+            print("      Aucun modèle n'a pu être évalué.")
+            print("      Exécutez notebooks/modelling.ipynb pour entraîner les modèles.")
 
-    print("Model evaluation completed. Metrics saved to results/model_metrics.csv")
-    print(metrics_df.to_string(index=False))
-    print(f"\nLaunching Streamlit on http://{STREAMLIT_HOST}:{STREAMLIT_PORT} ...")
+    except FileNotFoundError as exc:
+        print(f"\n[!] Données manquantes — évaluation ignorée.")
+        print(f"    {exc}")
+        print("    → Consultez le README pour télécharger les données sources.")
+        print("    → Exécutez les notebooks pour générer les datasets et modèles.")
+    except Exception as exc:
+        print(f"\n[!] Évaluation ignorée — {type(exc).__name__}: {exc}")
+
+    print(f"\n[3/3] Lancement de l'application Streamlit...")
+    print(f"      URL : http://{STREAMLIT_HOST}:{STREAMLIT_PORT}")
+    print("=" * 60)
 
     _launch_streamlit()
 

@@ -315,9 +315,10 @@ http-client.private.env.json
 
 # PROJECT SPECIFIC EXCLUSIONS ↓
 
-# Exclude logs directory
+# Logs
 logs/*
-# Local datasets (all data stays local, not on GitHub)
+
+# Datasets — non versionnés (> 100 Mo, télécharger via README)
 data/raw/*
 data/processed/*
 data/external/*
@@ -325,5 +326,13 @@ data/external/*
 !data/processed/.gitkeep
 !data/external/.gitkeep
 
+# Modèles trop grands pour GitHub (> 100 Mo)
+# → Régénérer via notebooks/modelling.ipynb
+models/random_forest.pkl
+models/random_forest_v2.pkl
+
 # Python virtual environment
 .venv/
+
+# macOS
+.DS_Store

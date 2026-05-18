@@ -30,12 +30,15 @@ MODEL_METRICS_FILE = RESULTS_DIR / "model_metrics.csv"
 STREAMLIT_HOST = "localhost"
 STREAMLIT_PORT = 8501
 
-# Students must replace this example with their trained models.
-# Each entry must point to a serialized model saved as `.joblib`, `.pkl`, or `.pickle`.
 MODELS = {
-    "model_a": {
-        "name": "Model A",
-        "description": "A simple baseline model.",
-        "path": MODELS_DIR / "model_a.pkl",
+    "linear_regression": {
+        "name": "Régression Linéaire",
+        "description": "Pipeline RobustScaler + régression linéaire — baseline interprétable.",
+        "path": MODELS_DIR / "linear_regression.pkl",
+    },
+    "gradient_boosting": {
+        "name": "Gradient Boosting",
+        "description": "HistGradientBoostingRegressor — 500 itérations, learning_rate=0.05.",
+        "path": MODELS_DIR / "gradient_boosting.pkl",
     },
 }
