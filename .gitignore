@@ -336,3 +336,10 @@ models/random_forest_v2.pkl
 
 # macOS
 .DS_Store
+
+# Claude Code tooling
+.claude/
+
+# Projets séparés présents à la racine du dépôt
+hackathon/
+ProjetsEtudiantsHackathon2026/
