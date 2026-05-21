@@ -1,2 +1,5 @@
-node_modules/
+build_slides.js
+package.json
 package-lock.json
+soutenance.pptx
+node_modules/
