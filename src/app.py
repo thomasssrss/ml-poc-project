@@ -619,7 +619,7 @@ elif page == "Feature Engineering":
         "(documentées dans `notebooks/feature_engineering.ipynb`)."
     )
 
-    tab1, tab2 = st.tabs(["📈 Log-transform de la cible", "🛠️ Features construites"])
+    tab1, tab2, tab3 = st.tabs(["📈 Log-transform de la cible", "🛠️ Toutes les features", "🗺️ Features géographiques"])
 
     with tab1:
         st.markdown("""
@@ -658,33 +658,120 @@ elif page == "Feature Engineering":
             st.caption("✅ Distribution symétrique — plus facile à modéliser")
 
     with tab2:
-        st.markdown("### Features construites lors du feature engineering")
+        st.markdown("### Nettoyage du dataset DVF")
+        col_f1, col_f2, col_f3 = st.columns(3)
+        col_f1.metric("Lignes brutes", "420 066")
+        col_f2.metric("Après filtrage", "188 426", delta="-231 640", delta_color="off")
+        col_f3.metric("Après outliers", "156 077", delta="-32 349", delta_color="off")
+        st.caption("Filtres appliqués : Type=Vente · Commune=Paris · Local=Appartement · Surface>0 · 3 000 ≤ prix_m² ≤ 25 000 €")
 
-        features_df = pd.DataFrame({
-            "Feature": ["log_surface", "surface_par_piece", "arrondissement_prix_moyen"],
-            "Calcul": [
-                "log(surface + 1)",
-                "surface / nb_pieces",
-                "Prix moyen de l'arrondissement (train set)",
-            ],
-            "Intérêt": [
-                "Relation non-linéaire surface → prix",
-                "Proxy du standing du bien",
-                "Encode le niveau de prix de la zone",
+        st.divider()
+        st.markdown("### Features DVF conservées (brutes)")
+        features_dvf = pd.DataFrame({
+            "Feature": ["surface_reelle_batie", "nombre_pieces_principales", "code_departement", "code_commune"],
+            "Type": ["Numérique", "Numérique", "Catégoriel", "Catégoriel"],
+            "Description": [
+                "Surface habitable en m² (variable clé)",
+                "Nombre de pièces de l'appartement",
+                "Toujours 75 (Paris)",
+                "Code arrondissement (7501 à 7520)",
             ],
         })
-        st.dataframe(features_df, use_container_width=True, hide_index=True)
+        st.dataframe(features_dvf, use_container_width=True, hide_index=True)
 
+        st.divider()
+        st.markdown("### Features construites (engineered)")
+        features_eng = pd.DataFrame({
+            "Feature": ["log_surface", "surface_par_piece", "arrondissement_prix_moyen"],
+            "Calcul": [
+                "log(surface_reelle_batie + 1)",
+                "surface / nombre_pieces",
+                "Prix médian de l'arrondissement (calculé sur le train set uniquement)",
+            ],
+            "Pourquoi ?": [
+                "La relation surface→prix n'est pas linéaire : doubler la surface ne double pas le prix. Le log capture cette courbe.",
+                "Un 60m² en 2 pièces ≠ un 60m² en 4 pièces. Ce ratio est un proxy du standing.",
+                "Remplace le numéro d'arrondissement par une valeur continue et informative. Calculé sur le train pour éviter le data leakage.",
+            ],
+        })
+        st.dataframe(features_eng, use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.markdown("### Transformations testées et rejetées")
+        features_rej = pd.DataFrame({
+            "Transformation": ["StandardScaler", "Encodage ordinal arrondissement", "PCA", "Grille géographique 80×80"],
+            "Raison du rejet": [
+                "Sensible aux valeurs extrêmes → RobustScaler préféré",
+                "Le numéro d'arrondissement est déjà un entier 1–20, redondant avec arrondissement_prix_moyen",
+                "Détruit l'interprétabilité des features — on ne saurait plus quelle variable compte",
+                "Dégradait les performances : R² 0.50 → 0.40 (trop grossier pour capturer la micro-localisation)",
+            ],
+        })
+        st.dataframe(features_rej, use_container_width=True, hide_index=True)
+
+    with tab3:
         st.markdown("""
-        ### Transformations testées et rejetées
+        ### 19 features géographiques — méthode BallTree haversine
 
-        | Transformation | Raison du rejet |
-        |---|---|
-        | StandardScaler | Sensible aux outliers → RobustScaler préféré |
-        | Encodage ordinal arrondissement | Déjà un entier (1–20), redondant |
-        | PCA | Détruit l'interprétabilité des features |
-        | Grille géographique 80×80 | Dégradait les performances (R² 0.50→0.40) |
+        Pour chaque transaction DVF, on a calculé des **distances réelles** aux équipements
+        environnants. La méthode utilisée est un **BallTree avec métrique haversine** :
+        c'est un algorithme de recherche spatiale qui calcule les vraies distances sphériques
+        entre deux points GPS (latitude/longitude), en tenant compte de la courbure de la Terre.
+
+        > Avantage : beaucoup plus rapide qu'une boucle classique sur 156 000 × N points —
+        > on passe de plusieurs heures à quelques secondes.
         """)
+
+        geo_features = pd.DataFrame({
+            "Feature": [
+                "distance_station_m", "nb_stations_200m", "nb_stations_500m",
+                "distance_rer_m", "nb_rer_200m", "nb_rer_500m",
+                "distance_parc_m", "nb_parcs_500m", "nb_parcs_1000m",
+                "distance_restaurant_m", "nb_restaurants_500m",
+                "distance_boulangerie_m", "nb_boulangeries_500m",
+                "distance_banque_m", "nb_banques_500m",
+                "distance_cafe_m", "nb_cafes_500m",
+                "distance_parking_m", "nb_parking_300m",
+            ],
+            "Source": [
+                "IDFM", "IDFM", "IDFM",
+                "IDFM", "IDFM", "IDFM",
+                "OpenData Paris", "OpenData Paris", "OpenData Paris",
+                "INSEE BPE", "INSEE BPE",
+                "INSEE BPE", "INSEE BPE",
+                "INSEE BPE", "INSEE BPE",
+                "INSEE BPE", "INSEE BPE",
+                "OpenData Paris", "OpenData Paris",
+            ],
+            "Description": [
+                "Distance à la station Métro/RER la plus proche",
+                "Nb de stations dans un rayon de 200 m",
+                "Nb de stations dans un rayon de 500 m",
+                "Distance au RER le plus proche",
+                "Nb de RER dans 200 m",
+                "Nb de RER dans 500 m",
+                "Distance au parc/espace vert (>1000 m²) le plus proche",
+                "Nb de parcs dans 500 m",
+                "Nb de parcs dans 1000 m",
+                "Distance au restaurant le plus proche",
+                "Nb de restaurants dans 500 m",
+                "Distance à la boulangerie la plus proche",
+                "Nb de boulangeries dans 500 m",
+                "Distance à la banque la plus proche",
+                "Nb de banques dans 500 m",
+                "Distance au café le plus proche",
+                "Nb de cafés dans 500 m",
+                "Distance à une place de stationnement",
+                "Nb de places de stationnement dans 300 m",
+            ],
+        })
+        st.dataframe(geo_features, use_container_width=True, hide_index=True)
+
+        st.info(
+            "💡 Ces 19 features sont calculées **une seule fois** lors du feature engineering "
+            "et stockées dans le fichier de données. Dans l'estimateur par adresse, elles sont "
+            "recalculées **en temps réel** à partir des coordonnées GPS géocodées."
+        )
 
 # ---------------------------------------------------------------------------
 # Page 4 — D4 Visualisation 3 : Performances des modèles
@@ -754,6 +841,63 @@ elif page == "Estimer un prix":
         "Deux modes d'estimation : par **arrondissement** (rapide) "
         "ou par **adresse exacte** (plus précis — tient compte de la micro-localisation)."
     )
+
+    with st.expander("📖 Comment fonctionne l'estimation ? (bonus & malus appliqués)", expanded=False):
+        col_bm1, col_bm2 = st.columns(2)
+
+        with col_bm1:
+            st.markdown("#### 🏢 Étage")
+            etage_bm = pd.DataFrame({
+                "Étage": ["RDC", "1er", "2e", "3e – 4e", "5e – 6e", "7e et +"],
+                "Ajustement": ["-4%", "-2%", "0% (référence)", "+1.5%", "+3%", "+4%"],
+                "Raison": [
+                    "Moins lumineux, bruit de rue, moins sécurisé",
+                    "Peu de lumière, pas de vue",
+                    "Niveau de référence du marché parisien",
+                    "Bon compromis luminosité / praticité",
+                    "Vue dégagée, calme, lumineux",
+                    "Vue panoramique, très calme",
+                ],
+            })
+            st.dataframe(etage_bm, use_container_width=True, hide_index=True)
+
+            st.markdown("#### 🚪 Sans ascenseur (malus supplémentaire)")
+            asc_bm = pd.DataFrame({
+                "Étage": ["RDC – 1er", "2e", "3e", "4e", "5e et +"],
+                "Malus": ["0%", "-1%", "-2.5%", "-4%", "-6%"],
+            })
+            st.dataframe(asc_bm, use_container_width=True, hide_index=True)
+            st.caption("L'ascenseur est un standard à Paris → sa présence ne crée pas de bonus, son absence crée un malus progressif.")
+
+        with col_bm2:
+            st.markdown("#### 🚇 Proximité transport (Métro/RER)")
+            transport_bm = pd.DataFrame({
+                "Situation": ["< 200 m d'une station", "200 – 400 m", "400 – 700 m", "> 700 m", "+ 3 stations dans 500 m"],
+                "Ajustement": ["+2.5%", "+1.5%", "0%", "-1.5%", "+1.5% supplémentaire"],
+            })
+            st.dataframe(transport_bm, use_container_width=True, hide_index=True)
+
+            st.markdown("#### 🌳 Proximité espaces verts")
+            parcs_bm = pd.DataFrame({
+                "Situation": ["< 150 m d'un parc", "150 – 400 m", "400 – 700 m", "> 700 m"],
+                "Ajustement": ["+3%", "+1.5%", "+0.5%", "0%"],
+            })
+            st.dataframe(parcs_bm, use_container_width=True, hide_index=True)
+
+            st.markdown("#### 🛍️ Commerces & 🅿️ Stationnement")
+            com_bm = pd.DataFrame({
+                "Situation": ["> 15 commerces dans 500 m", "8 – 15 commerces", "< 8 commerces",
+                              "> 15 places parking dans 300 m", "5 – 15 places", "< 5 places"],
+                "Ajustement": ["+2%", "+1%", "0%", "+2%", "+1%", "0%"],
+            })
+            st.dataframe(com_bm, use_container_width=True, hide_index=True)
+
+            st.markdown("#### 🏙️ Type de voie (mode adresse uniquement)")
+            voie_bm = pd.DataFrame({
+                "Type de voie": ["Avenue", "Boulevard", "Quai", "Place / Esplanade", "Cours", "Rue", "Villa / Cité", "Passage", "Impasse / Ruelle"],
+                "Ajustement": ["+5%", "+4%", "+4%", "+3%", "+2%", "0%", "-2%", "-4%", "-5%"],
+            })
+            st.dataframe(voie_bm, use_container_width=True, hide_index=True)
 
     tab_arr, tab_adresse = st.tabs(["🗺️ Par arrondissement", "📍 Par adresse (précis)"])
 
